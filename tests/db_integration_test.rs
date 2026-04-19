@@ -1,4 +1,4 @@
-use scripture_os::get_verses_by_path;
+use scripture_os::engines::content::fetch_text;
 use sqlx::postgres::PgPoolOptions;
 use dotenvy::dotenv;
 use std::env;
@@ -62,7 +62,7 @@ async fn test_chapter_retrieval() {
     seed_base_data(&pool).await;
 
     // 2. Run actual test
-    let results = get_verses_by_path(&pool, "bible.nt.john.17").await.unwrap();
+    let results = fetch_text(&pool, "bible.nt.john.17").await.unwrap();
 
     assert!(!results.is_empty());
     assert_eq!(results[0].edition_name, "KJV");
@@ -95,7 +95,7 @@ async fn test_parallel_versions() {
         .execute(&pool).await.unwrap();
 
     // 4. Fetch and verify
-    let results = get_verses_by_path(&pool, "bible.nt.john.17.3").await.unwrap();
+    let results = fetch_text(&pool, "bible.nt.john.17.3").await.unwrap();
 
     // Check that we got 2 results for the same path
     assert!(results.len() >= 2, "Should have retrieved both KJV and Greek Versions");

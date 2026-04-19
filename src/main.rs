@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use scripture_os::models::ScriptureContent;
-use scripture_os::get_verses_by_path;
+use scripture_os::engines::content::fetch_text;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use dotenvy:: dotenv;
@@ -41,7 +41,7 @@ async fn handle_get_verses(
     Path(path): Path<String>,
     State(pool): State<sqlx::postgres::PgPool>,
 ) -> Json<Vec<ScriptureContent>> {
-    let verses = get_verses_by_path(&pool, &path)
+    let verses = fetch_text(&pool, &path)
         .await
         .unwrap_or_else(|_| vec![]);
     Json(verses)
