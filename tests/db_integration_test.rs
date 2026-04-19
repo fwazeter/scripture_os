@@ -77,10 +77,11 @@ async fn test_parallel_versions() {
     seed_base_data(&pool).await;
 
     // 2. Add a 2nd edition
-    let greek_edition_id = Uuid::new_v4();
+    let greek_edition_id = Uuid::parse_str("88888888-8888-8888-8888-888888888886").unwrap();
+
     sqlx::query(r#"
         INSERT INTO editions (id, work_id, name, language_code, is_source)
-        VALUES ($1, '22222222-2222-2222-2222-222222222222', 'SBLGNT', 'grc', true)
+        VALUES ($1, '88888888-8888-8888-8888-888888888882', 'SBLGNT', 'grc', true)
         ON CONFLICT DO NOTHING"# )
         .bind(greek_edition_id)
         .execute(&pool).await.unwrap();
@@ -88,8 +89,8 @@ async fn test_parallel_versions() {
     // 3. Link Greek text to the SAME John 17:3 node
     sqlx::query(r#"
         INSERT INTO texts (node_id, edition_id, body_text)
-        VALUES ('44444444-4444-4444-4444-444444444444',
-                (SELECT id FROM editions WHERE name = 'SBLGNT'),
+        VALUES ('88888888-8888-8888-8888-888888888884',
+                (SELECT id FROM editions WHERE name = 'SBLGNT' LIMIT 1),
                 'αὕτη δέ ἐστιν ἡ αἰώνιος ζωή, ἵνα γινώσκωσιν σὲ τὸν μόνον ἀληθινὸν θεὸν καὶ ὃν ἀπέστειλας Ἰησοῦν Χριστόν.')
         ON CONFLICT DO NOTHING"# )
         .execute(&pool).await.unwrap();

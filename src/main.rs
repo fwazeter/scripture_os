@@ -1,13 +1,21 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::get,
     Json, Router,
+    http::StatusCode
 };
-use scripture_os::models::ScriptureContent;
-use scripture_os::engines::content::fetch_text;
+use serde::Deserialize;
+use scripture_os::engines::{resolution, content};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use dotenvy:: dotenv;
+use serde_json::{Value, json};
+
+// Struct to parse the `?q=...` from the URL
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Define routes
     let app = Router::new()
-        .route("/verses/{path}", get(handle_get_verses))
+        .route("/v1/read/{work_slug}", get(handle_read_scripture))
         .with_state(pool);
 
     // Start server
@@ -36,13 +44,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Handler logic
-async fn handle_get_verses(
-    Path(path): Path<String>,
-    State(pool): State<sqlx::postgres::PgPool>,
-) -> Json<Vec<ScriptureContent>> {
-    let verses = fetch_text(&pool, &path)
-        .await
-        .unwrap_or_else(|_| vec![]);
-    Json(verses)
+// Core Gateway handler
+async fn handle_read_scripture(
+    Path(work_slug): Path<String>,
+    Query(search): Query<SearchQuery>,
+    State(pool): State<sqlx::PgPool>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+
+    // Engine 1: Resolution (Convert "Jn 17:3" -> "bible_int.nt.john.17.3")
+    let ltree_path = match resolution::parse_address(&pool, &work_slug, &search.q).await {
+        Ok(path) => path,
+        Err(e) => {
+            let error_response = json!({ "error": format!("Could not resolve address: {}", e) });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Engine 2: Content (Fetch actual text using ltree path)
+    let verses = match content::fetch_text(&pool, &ltree_path).await {
+        Ok(v) => v,
+        Err(e) => {
+            let error_response = json!({ "error": format!("Database error: {}", e) });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Return successful JSON payload
+    Ok(Json(json!({
+        "query": search.q,
+        "resolved_path": ltree_path,
+        "content": verses
+    })))
 }
