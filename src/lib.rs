@@ -1,4 +1,7 @@
 pub mod models;
+pub mod engines {
+    pub mod resolution;
+}
 use models:: ScriptureContent;
 use sqlx:: PgPool;
 

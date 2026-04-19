@@ -1,28 +1,67 @@
-use scripture_os::get_verses_by_path; // Import from lib
+use scripture_os::get_verses_by_path;
 use sqlx::postgres::PgPoolOptions;
 use dotenvy::dotenv;
 use std::env;
 use uuid::Uuid;
-// Seeding logic should be included here.
 
-#[tokio::test]
-async fn test_chapter_retrieval() {
-    // explicitly load .env file for test binary
+async fn setup_db() -> sqlx::PgPool {
     dotenv().ok();
-
-    // get DB url
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set in .env for integration tests");
 
-    let pool = PgPoolOptions::new()
+    PgPoolOptions::new()
         .max_connections(1)
         .connect(&database_url)
-        .await.unwrap();
+        .await
+        .unwrap()
+}
 
-    // 1. (Optional) Run your seeding logic here if the DB is empty
-    //    ... insert code ...
+// Reusable seeding function for our tests
+async fn seed_base_data(pool: &sqlx::PgPool) {
+    // 1. Tradition
+    sqlx::query(r#"
+        INSERT INTO traditions (id, name)
+        VALUES ('11111111-1111-1111-1111-111111111111', 'Abrahamic')
+        ON CONFLICT DO NOTHING
+    "#).execute(pool).await.unwrap();
 
-    // Run actual test
+    // 2. Work
+    sqlx::query(r#"
+        INSERT INTO works (id, tradition_id, slug, title)
+        VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'bible', 'The Holy Bible')
+        ON CONFLICT DO NOTHING
+    "#).execute(pool).await.unwrap();
+
+    // 3. Edition
+    sqlx::query(r#"
+        INSERT INTO editions (id, work_id, name, language_code, is_source)
+        VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'KJV', 'en', false)
+        ON CONFLICT DO NOTHING
+    "#).execute(pool).await.unwrap();
+
+    // 4. Node
+    sqlx::query(r#"
+        INSERT INTO nodes (id, work_id, path, node_type, sort_order)
+        VALUES ('44444444-4444-4444-4444-444444444444', '22222222-2222-2222-2222-222222222222', 'bible.nt.john.17.3', 'verse', 1.0)
+        ON CONFLICT DO NOTHING
+    "#).execute(pool).await.unwrap();
+
+    // 5. Text
+    sqlx::query(r#"
+        INSERT INTO texts (id, node_id, edition_id, body_text)
+        VALUES ('55555555-5555-5555-5555-555555555555', '44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333', 'And this is life eternal, that they might know thee the only true God...')
+        ON CONFLICT DO NOTHING
+    "#).execute(pool).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_chapter_retrieval() {
+    let pool = setup_db().await;
+
+    // 1. Run seeding logic
+    seed_base_data(&pool).await;
+
+    // 2. Run actual test
     let results = get_verses_by_path(&pool, "bible.nt.john.17").await.unwrap();
 
     assert!(!results.is_empty());
@@ -32,28 +71,30 @@ async fn test_chapter_retrieval() {
 // Parallel Versions Test
 #[tokio::test]
 async fn test_parallel_versions() {
-    dotenv().ok();
-    let pool = PgPoolOptions::new().connect(&env::var("DATABASE_URL").unwrap()).await.unwrap();
+    let pool = setup_db().await;
 
-    // 1. Add a 2nd edition
+    // 1. Make sure base data exists
+    seed_base_data(&pool).await;
+
+    // 2. Add a 2nd edition
     let greek_edition_id = Uuid::new_v4();
     sqlx::query(r#"
-                    INSERT INTO editions (id, work_id, name, language_code, is_source)
-                    VALUES ($1, (SELECT id FROM works LIMIT 1), 'SBLGNT', 'grc', true)
-                    ON CONFLICT DO NOTHING"# )
+        INSERT INTO editions (id, work_id, name, language_code, is_source)
+        VALUES ($1, '22222222-2222-2222-2222-222222222222', 'SBLGNT', 'grc', true)
+        ON CONFLICT DO NOTHING"# )
         .bind(greek_edition_id)
         .execute(&pool).await.unwrap();
 
-    // 2. Link Greek text to the SAME John 17:3 node
+    // 3. Link Greek text to the SAME John 17:3 node
     sqlx::query(r#"
-                        INSERT INTO texts (node_id, edition_id, body_text)
-                        VALUES ((SELECT id FROM nodes WHERE path = 'bible.nt.john.17.3'),
-                                (SELECT id FROM editions WHERE name = 'SBLGNT'),
-                                'αὕτη δέ ἐστιν ἡ αἰώνιος ζωή, ἵνα γινώσκωσιν σὲ τὸν μόνον ἀληθινὸν θεὸν καὶ ὃν ἀπέστειλας Ἰησοῦν Χριστόν.')
-                                ON CONFLICT DO NOTHING"# )
+        INSERT INTO texts (node_id, edition_id, body_text)
+        VALUES ('44444444-4444-4444-4444-444444444444',
+                (SELECT id FROM editions WHERE name = 'SBLGNT'),
+                'αὕτη δέ ἐστιν ἡ αἰώνιος ζωή, ἵνα γινώσκωσιν σὲ τὸν μόνον ἀληθινὸν θεὸν καὶ ὃν ἀπέστειλας Ἰησοῦν Χριστόν.')
+        ON CONFLICT DO NOTHING"# )
         .execute(&pool).await.unwrap();
 
-    // 3. Fetch and verify
+    // 4. Fetch and verify
     let results = get_verses_by_path(&pool, "bible.nt.john.17.3").await.unwrap();
 
     // Check that we got 2 results for the same path

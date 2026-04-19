@@ -11,3 +11,5 @@ dotenvy = "0.15.7"
 axum = "0.8.9"
 serde = { version = "1.0.228", features = ["derive"] }
 tower-http = { version = "0.6.8", features = ["cors"] } #for browser access
+regex = "1.12.3"
+anyhow = "1.0.102"

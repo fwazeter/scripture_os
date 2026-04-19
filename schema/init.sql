@@ -1,5 +1,9 @@
 -- Enable hierarchical tree extension
 CREATE EXTENSION IF NOT EXISTS ltree;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Enum for node types (Book, Chapter, Verse)
+CREATE TYPE node_type_enum AS ENUM ('book', 'chapter', 'verse');
 
 -- 1. Traditions (e.g. Abrahamic)
 CREATE TABLE traditions (
@@ -11,6 +15,7 @@ CREATE TABLE traditions (
 CREATE TABLE works (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tradition_id UUID REFERENCES traditions(id),
+    slug TEXT UNIQUE NOT NULL,
     title TEXT NOT NULL
 );
 
@@ -28,10 +33,20 @@ CREATE TABLE nodes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     work_id UUID REFERENCES works(id),
     path LTREE UNIQUE NOT NULL,
-    sort_order INTEGER NOT NULL
+    node_type node_type_enum NOT NULL,
+    sort_order DECIMAL NOT NULL
 );
 
--- 5. Texts (The Content)
+-- 5. Node Aliases (Resolves "Jn" -> "john")
+CREATE TABLE node_aliases (
+                              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                              node_id UUID REFERENCES nodes(id),
+                              alias TEXT NOT NULL,
+                              is_canonical BOOLEAN DEFAULT FALSE,
+                              UNIQUE(alias, node_id)
+);
+
+-- 6. Texts (The Content)
 CREATE TABLE texts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     node_id UUID REFERENCES nodes(id),
