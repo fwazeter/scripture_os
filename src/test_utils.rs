@@ -21,7 +21,7 @@ pub async fn seed_universal_data(pool: &PgPool) {
             INSERT INTO traditions (id, name) VALUES
             ('00000000-0000-0000-0000-000000000001', 'Abrahamic'),
             ('00000000-0000-0000-0000-000000000002', 'Vedic')
-            ON CONFLICT (id) DO NOTHING;
+            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
             "#
     ).execute(pool).await.unwrap();
 
@@ -33,7 +33,7 @@ pub async fn seed_universal_data(pool: &PgPool) {
             ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001', 'quran_hafs', 'The Quran (Hafs)'),
             ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000001', 'quran_warsh', 'The Quran (Warsh)'),
             ('00000000-0000-0000-0000-000000000014', '00000000-0000-0000-0000-000000000002', 'rigveda', 'The Rig Veda')
-            ON CONFLICT (id) DO NOTHING;
+            ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title;
             "#
     ).execute(pool).await.unwrap();
     // ==========================================
@@ -60,7 +60,7 @@ pub async fn seed_universal_data(pool: &PgPool) {
             -- Rig Veda Editions
             ('00000000-0000-0000-0000-000000000141', '00000000-0000-0000-0000-000000000014', 'Sanskrit_Original', 'sa', true),
             ('00000000-0000-0000-0000-000000000142', '00000000-0000-0000-0000-000000000014', 'Griffith_Translation', 'en', false)
-            ON CONFLICT (id) DO NOTHING;
+            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, language_code = EXCLUDED.language_code;
             "#
     ).execute(pool).await.unwrap();
     // ==========================================
@@ -93,12 +93,13 @@ pub async fn seed_universal_data(pool: &PgPool) {
         ('00000000-0000-0000-0000-000000000A11', '00000000-0000-0000-0000-000000000014', 'rigveda.ashtaka.1.adhyaya.1.varga.1.mantra.1', 'sloka', 3000, 3000),
 
         -- NT BIBLE PATH (For existing routing tests)
+        ('00000000-0000-0000-0000-000000000A13', '00000000-0000-0000-0000-000000000010', 'bible.nt.john', 'book', 4000, 4000),
         ('00000000-0000-0000-0000-000000000A12', '00000000-0000-0000-0000-000000000010', 'bible.nt.john.17.3', 'verse', 4000, 4000)
-        ON CONFLICT (id) DO NOTHING;
+        ON CONFLICT (id) DO UPDATE SET path = EXCLUDED.path, start_index = EXCLUDED.start_index, end_index = EXCLUDED.end_index;
     "#).execute(pool).await.unwrap();
 
     // 3.5 Aliases
-    sqlx::query("INSERT INTO node_aliases (node_id, alias, is_canonical) VALUES ('00000000-0000-0000-0000-000000000A12', 'Jn 17:3', true) ON CONFLICT DO NOTHING").execute(pool).await.unwrap();
+    sqlx::query("INSERT INTO node_aliases (node_id, alias, is_canonical) VALUES ('00000000-0000-0000-0000-000000000A13', 'Jn', true) ON CONFLICT DO NOTHING").execute(pool).await.unwrap();
 
     // ==========================================
     // 4. CONTENT LAYER (The Universal Absolute Sequence Texts)
@@ -142,6 +143,6 @@ pub async fn seed_universal_data(pool: &PgPool) {
         ('00000000-0000-0000-0000-000000000101', 4000, 'And this is life eternal...'),
         ('00000000-0000-0000-0000-000000000104', 4000, 'αὕτη δέ ἐστιν ἡ αἰώνιος ζωή...')
 
-        ON CONFLICT DO NOTHING;
+        ON CONFLICT (edition_id, absolute_index) DO UPDATE SET body_text = EXCLUDED.body_text;
     "#).execute(pool).await.unwrap();
 }
