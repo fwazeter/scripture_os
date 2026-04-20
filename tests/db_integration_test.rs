@@ -101,7 +101,7 @@ async fn test_traversal_adjacency_across_shifts() {
 
     // Verify the Traversal engine can successfully find the next node
     // by comparing start_index and end_index ranges
-    let adjacency = traversal::get_adjacent_nodes(&repo, hafs_1_1_id).await.unwrap();
+    let adjacency = traversal::get_adjacent(&repo, hafs_1_1_id).await.unwrap();
 
     assert!(adjacency.previous.is_none(), "Ayah 1 has no previous node");
     assert!(adjacency.next.is_some(), "Ayah 1 should have a next node");

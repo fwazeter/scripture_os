@@ -1,3 +1,18 @@
+//! # PostgreSQL Repository Implementation
+//!
+//! This module acts as the "Physical Layer" of Scripture OS. It translates
+//! domain-specific requests (like "Give me the next chapter") into optimized
+//! SQL queries utilizing PostgreSQL-specific extensions.
+//!
+//! ### Architectural Design Decision: Stand-off Markup
+//! Scripture OS does not store text inside the hierarchy nodes. Instead, it uses
+//! a "Spine" (`nodes`) and "Content" (`texts`) model.
+//! 1. `nodes` (Spine): Provides the address/path using `ltree`.
+//! 2. `texts` (Content): Stores the actual strings, indexed by an `absolute_index`.
+//!
+//! This separation allows us to represent multiple translations (English, Greek,
+//! Hebrew) for the exact same structural node without duplicating the hierarchy.
+
 use sqlx::PgPool;
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -6,7 +21,21 @@ use anyhow::Result;
 use crate::models::{HierarchyNode, Adjacency, ScriptureContent};
 use super::ScriptureRepository;
 
-// Private helper struct for SQLx to map our complex adjacency query TO REMOVE
+pub struct PostgresRepository {
+    pool: PgPool,
+}
+
+impl PostgresRepository {
+    /// Creates a new repository instance.
+    ///
+    /// **Expects:** A pre-configured `PgPool` with the `ltree` and `pgcrypto`
+    /// extensions already enabled in the target database.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+// Private helper struct for SQLx to map our complex adjacency query
 #[derive(sqlx::FromRow)]
 struct AdjacencyRow {
     prev_id: Option<Uuid>,
@@ -15,18 +44,27 @@ struct AdjacencyRow {
     next_path: Option<String>,
 }
 
-pub struct PostgresRepository {
-    pool: PgPool,
-}
-
-impl PostgresRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}
-
 #[async_trait]
 impl ScriptureRepository for PostgresRepository {
+    /// ## `get_hierarchy`
+    /// **Parameters:** `parent_path: &str` (The canonical LTREE path of the parent node).
+    ///
+    /// ### Architectural Design Decision: Depth-Limited Exploration
+    /// Prevents "Data Flooding" by ensuring that a request for a high-level node (e.g., a "Work")
+    /// doesn't accidentally return every verse within it.
+    ///
+    /// ### Design Decision: Structural Integrity
+    /// Uses the `nlevel()` PostgreSQL function to calculate direct lineage.
+    /// 1. Identifies the depth of the `parent_path`.
+    /// 2. Filters for nodes exactly one level deeper (`nlevel + 1`).
+    ///
+    /// ### SQL Quirk: Double Casting for LTREE
+    /// Because `sqlx` does not have a native `ltree` type, we must cast the input string
+    /// to `text` first, and then to `ltree` (`$1::text::ltree`) to ensure the GIST
+    /// index is utilized correctly by the query optimizer.
+    ///
+    /// **AI Prompt Hint:** If implementing "Deep Retrieval" or "Recursive Menus,"
+    /// remove the `nlevel` constraint while keeping the `<@` (descendant) operator.
     async fn get_hierarchy(&self, parent_path: &str) -> Result<Vec<HierarchyNode>> {
         // Uses the ltree operators `<@` and `nlevel()` to fetch direct descendants.
         let nodes = sqlx::query_as::<_, HierarchyNode>(
@@ -45,6 +83,32 @@ impl ScriptureRepository for PostgresRepository {
         Ok(nodes)
     }
 
+    /// ## `get_adjacent_nodes`
+    /// **Parameters:** `current_node_id: Uuid` (The unique identifier of the node the user is currently viewing).
+    ///
+    /// ### Architectural Design Decision: Context-Aware Navigation
+    /// A major challenge in scripture navigation is "Type Drift"—for example, clicking 'Next' on a
+    /// Chapter node and accidentally receiving a Verse node.
+    ///
+    /// This function enforces **Type-Strict Adjacency**:
+    /// 1. It identifies the `node_type` (Chapter, Verse, Book) of the current ID.
+    /// 2. It restricts the search to only siblings of that exact same type within the same `work_id`.
+    ///
+    /// ### Design Decision: Boundary-Based Proximity
+    /// Instead of relying on sequential IDs (which can be fragmented) or `ltree` path string manipulation
+    /// (which is computationally expensive for adjacency), we use the **Universal Sequence Index**.
+    /// * **Previous:** The node of the same type whose `end_index` is the highest value still strictly less than our `start_index`.
+    /// * **Next:** The node of the same type whose `start_index` is the lowest value still strictly greater than our `end_index`.
+    ///
+    /// ### SQL Quirk: The CTE "Single Trip" Strategy
+    /// We use a Common Table Expression (CTE) to perform three logical lookups in one database round-trip:
+    /// 1. `current_node`: Establishes the anchor point metadata (work, type, and indices).
+    /// 2. `prev_node`: Scans "backwards" from the anchor.
+    /// 3. `next_node`: Scans "forwards" from the anchor.
+    ///
+    /// **AI Prompt Hint:** If implementing a "Wrap-around" feature (e.g., going from the last chapter of
+    /// Revelation back to Genesis 1), the `prev_node` and `next_node` CTEs would need to be updated
+    /// to handle `NULL` results by performing a `MIN`/`MAX` fallback.
     async fn get_adjacent_nodes(&self, current_node_id: Uuid) -> Result<Adjacency> {
         // A single optimized query using a CTE (WITH clause) to fetch previous/next nodes
         let row = sqlx::query_as::<_, AdjacencyRow>(
@@ -77,12 +141,31 @@ impl ScriptureRepository for PostgresRepository {
         .fetch_one(&self.pool)
         .await?;
 
+        // Mapping Logic: We use .zip() to ensure that a HierarchyNode is only
+        // created if BOTH the ID and the Path are present in the SQL result.
         Ok(Adjacency {
             previous: row.prev_id.zip(row.prev_path).map(|(id, path)| HierarchyNode { id, path }),
             next: row.next_id.zip(row.next_path).map(|(id, path)| HierarchyNode { id, path }),
         })
     }
 
+    /// ## `fetch_text`
+    /// **Parameters:** `path: &str` (The canonical address, e.g., "bible.nt.jn.3.16").
+    ///
+    /// ### Architectural Design Decision: Sequence-to-Address Mapping
+    /// This function implements the core bridge between the hierarchical "Spine" and the linguistic "Content".
+    /// In the Stand-off Markup model, a node (like a Chapter) is a pointer to a range of absolute indices.
+    ///
+    /// ### Design Decision: Two-Step Resolution
+    /// 1. **Boundary Resolution:** Fetches `start_index` and `end_index` from the `nodes` table.
+    /// 2. **Content Aggregation:** Queries the `texts` table for all rows falling between those bounds.
+    ///
+    /// ### SQL Quirk: Range-Based Aggregation
+    /// We use a `BETWEEN` query on `absolute_index`. To ensure translations remain linked to the correct work,
+    /// we filter `edition_id` through a subquery that validates the `work_id` of the provided path.
+    ///
+    /// **AI Prompt Hint:** If the user asks for "Side-by-Side" views, the ordering `e.is_source DESC`
+    /// ensures original manuscripts (Greek/Hebrew) are always the first elements in the returned vector.
     async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
         // 1. Fetch the range bounds for the requested path
         let bounds = sqlx::query!(
@@ -116,6 +199,24 @@ impl ScriptureRepository for PostgresRepository {
         Ok(contents)
     }
 
+    /// ## `resolve_address`
+    /// **Parameters:** /// * `work_slug: &str` (The unique slug for the scriptural corpus, e.g., "bible").
+    /// * `alias: &str` (The human shorthand provided by the user, e.g., "Jn").
+    ///
+    /// ### Architectural Design Decision: Human-to-Machine Translation
+    /// Decouples the user's interface from the internal database structure. This allows
+    /// "Jn" to map to the canonical path `bible.nt.john` without hardcoding strings in Rust.
+    ///
+    /// ### Design Decision: Case-Insensitive Mapping
+    /// We use `ILIKE` to handle user variance (e.g., "jn" vs "JN"). The result is limited to 1
+    /// to ensure deterministic resolution even if overlapping aliases exist in the DB.
+    ///
+    /// ### SQL Quirk: Multi-Table Decoupling
+    /// This query joins `node_aliases`, `nodes`, and `works` to ensure the alias resolution
+    /// is scoped correctly to the specific tradition being queried.
+    ///
+    /// **AI Prompt Hint:** To support multi-language book names (e.g., "Génesis" in Spanish),
+    /// simply add the localized string as a new entry in the `node_aliases` table.
     async fn resolve_address(&self, work_slug: &str, alias: &str) -> Result<Option<String>> {
         // Extracts the alias lookup out of the resolution engine
         let record = sqlx::query!(
