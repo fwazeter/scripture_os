@@ -1,5 +1,6 @@
 use sqlx::PgPool;
-use crate::models::ScriptureContent;
+use serde::Serialize;
+use anyhow::Result;
 
 /// Retrieves text and edition metadata for a given ltree path.
 /// Matches the `fetchText` specification in dev plan.
