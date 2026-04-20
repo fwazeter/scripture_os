@@ -45,63 +45,16 @@ pub async fn parse_address(pool: &PgPool, work_slug: &str, input: &str) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-    use dotenvy::dotenv;
-    use std::env;
-    use uuid::Uuid;
-
-    async fn setup_db() -> PgPool {
-        dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        PgPoolOptions::new().connect(&db_url).await.unwrap()
-    }
 
     #[tokio::test]
     async fn test_parse_address_basic_routing() {
-        let pool = setup_db().await;
+        let pool = crate::test_utils::setup_db().await;
+        crate::test_utils::seed_universal_data(&pool).await;
 
-       // Use fixed UUIDS and unique test slugs so does not collide with integration tests
-        let work_id = Uuid::parse_str("99999999-9999-9999-9999-999999999991").unwrap();
-        let node_id = Uuid::parse_str("99999999-9999-9999-9999-999999999992").unwrap();
-
-        // 1. Insert Work
-        sqlx::query(
-            r#"
-                INSERT INTO works (id, title, slug)
-                VALUES ($1, 'Bible Unit Test', 'bible_test')
-                ON CONFLICT (id) DO NOTHING
-                "#
-        )
-            .bind(work_id).execute(&pool)
-            .await.unwrap();
-
-        // 2. Insert Node (using ON CONFLICT DO UPDATE to ensure our fixed node_id is the one saved)
-        sqlx::query(
-            r#"
-                INSERT INTO nodes (id, work_id, path, node_type, sort_order)
-                VALUES ($1, $2, 'bible_test.nt.john', 'book', 1.0)
-                ON CONFLICT (path) DO UPDATE SET id = $1
-                "#
-        )
-        .bind(node_id).bind(work_id).execute(&pool)
-        .await.unwrap();
-
-        // 3. Insert Alias
-        sqlx::query(
-            r#"
-                INSERT INTO node_aliases (node_id, alias, is_canonical)
-                VALUES ($1, 'JnTest', true)
-                ON CONFLICT DO NOTHING
-                "#
-        )
-            .bind(node_id).execute(&pool)
-            .await.unwrap();
-
-        // 4. Execute Target function
-        let ltree_path = parse_address(&pool, "bible_test", "JnTest 3:16")
-            .await.unwrap();
+       // Seed data maps "Jn" -> "bible_test.nt.john"
+        let ltree_path = parse_address(&pool, "bible_test", "Jn 17:3").await.unwrap();
 
         // 5. Assert
-        assert_eq!(ltree_path, "bible_test.nt.john.3.16");
+        assert_eq!(ltree_path, "bible_test.nt.john.17.3");
     }
 }

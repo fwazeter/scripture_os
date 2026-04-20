@@ -17,3 +17,19 @@ pub async fn fetch_text(pool: &PgPool, path: &str) -> Result<Vec<ScriptureConten
     .bind(path).fetch_all(pool)
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_fetch_multiple_editions() {
+        let pool = crate::test_utils::setup_db().await;
+        crate::test_utils::seed_universal_data(&pool).await;
+
+        // Fetch John 17:3. Seed data has both KJV & Greek Translations.
+        let results = fetch_text(&pool, "bible_test.nt.john.17.3").await.unwrap();
+
+        assert_eq!(results.len(), 2);
+    }
+}

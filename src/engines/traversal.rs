@@ -90,75 +90,36 @@ pub async fn get_adjacent_nodes(pool: &PgPool, current_node_id: Uuid) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-    use dotenvy::dotenv;
-    use std::env;
+    use uuid::Uuid;
 
-    async fn setup_db() -> PgPool {
-        dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        PgPoolOptions::new().connect(&db_url)
-            .await.unwrap()
-    }
-
-    // Helper function to seed data for tests
-    async fn seed_traversal_data(pool: &PgPool) {
-        let work_id = Uuid::parse_str("77777777-7777-7777-7777-777777777770").unwrap();
-
-        //  Setup isolated test data
-        sqlx::query("INSERT INTO works (id, title, slug) VALUES ($1, 'Traversal Test', 'trav_test') ON CONFLICT DO NOTHING")
-            .bind(work_id).execute(pool)
-            .await.unwrap();
-
-        // Insert Parent (Book)
-        sqlx::query("INSERT INTO nodes (id, work_id, path, node_type, sort_order) VALUES ('77777777-7777-7777-7777-777777777771', $1, 'trav_test.book1', 'book', 1.0) ON CONFLICT DO NOTHING")
-            .bind(work_id).execute(pool)
-            .await.unwrap();
-
-        // Insert Children (Chapters)
-        sqlx::query("INSERT INTO nodes (id, work_id, path, node_type, sort_order) VALUES ('77777777-7777-7777-7777-777777777772', $1, 'trav_test.book1.1', 'chapter', 1.1) ON CONFLICT DO NOTHING")
-            .bind(work_id).execute(pool)
-            .await.unwrap();
-        sqlx::query("INSERT INTO nodes (id, work_id, path, node_type, sort_order) VALUES ('77777777-7777-7777-7777-777777777773', $1, 'trav_test.book1.2', 'chapter', 1.2) ON CONFLICT DO NOTHING")
-            .bind(work_id).execute(pool)
-            .await.unwrap();
-
-        // Insert GrandChildren (verse - should NOT be returned by hierarchy)
-        sqlx::query("INSERT INTO nodes (id, work_id, path, node_type, sort_order) VALUES ('77777777-7777-7777-7777-777777777774', $1, 'trav_test.book1.1.1', 'verse', 1.11) ON CONFLICT DO NOTHING")
-            .bind(work_id).execute(pool)
-            .await.unwrap();
-    }
     #[tokio::test]
     async fn test_get_hierarchy() {
-        let pool = setup_db().await;
+        let pool = crate::test_utils::setup_db().await;
+        crate::test_utils::seed_universal_data(&pool).await;
 
-        // 1. Setup isolated test data using our new helper
-        seed_traversal_data(&pool).await;
+        // 2. Ask for children of the Book of John ("bible_test.nt.john")
+        // Should return Chapter 17 based on seed data, but not verses.
+        let children = get_hierarchy(&pool, "bible_test.nt.john").await.unwrap();
 
-        // 2. Execute
-        let children = get_hierarchy(&pool, "trav_test.book1").await.unwrap();
-
-        // 3. Assert (Should only return the two chapters, not the verse)
-        assert_eq!(children.len(), 2);
-        assert_eq!(children[0].path, "trav_test.book1.1");
-        assert_eq!(children[1].path, "trav_test.book1.2");
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].path, "bible_test.nt.john.17");
     }
 
     #[tokio::test]
     async fn test_get_adjacent_nodes() {
-        let pool = setup_db().await;
+        let pool = crate::test_utils::setup_db().await;
+        crate::test_utils::seed_universal_data(&pool).await;
 
-        // 1. Setup isolated test data using our new helper
-        seed_traversal_data(&pool).await;
-
-        // We will test adjacency on Chapter 1 (ID ...7772).
-        // It should have NO previous and Chapter 2 (ID ...7773) as next.
-        let target_node = Uuid::parse_str("77777777-7777-7777-7777-777777777772").unwrap();
+        // Target: John 17:3 (ID: ....0102)
+        // Previous should be 17:2, next 17:4
+        let target_node = Uuid::parse_str("00000000-0000-0000-0000-000000000102").unwrap();
 
         let adjacency = get_adjacent_nodes(&pool, target_node).await.unwrap();
 
-        assert!(adjacency.previous.is_none());
+        assert!(adjacency.previous.is_some());
+        assert_eq!(adjacency.previous.unwrap().path, "bible_test.nt.john.17.2");
+
         assert!(adjacency.next.is_some());
-        assert_eq!(adjacency.next.unwrap().path, "trav_test.book1.2");
+        assert_eq!(adjacency.next.unwrap().path, "bible_test.nt.john.17.4");
     }
 }

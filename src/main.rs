@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode
 };
 use serde::Deserialize;
-use scripture_os::engines::{resolution, content};
+use scripture_os::engines::{resolution, content, traversal};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use dotenvy:: dotenv;
@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define routes
     let app = Router::new()
         .route("/v1/read/{work_slug}", get(handle_read_scripture))
+        .route("/v1/structure/{path}", get(handle_get_structure))
         .with_state(pool);
 
     // Start server
@@ -74,5 +75,28 @@ async fn handle_read_scripture(
         "query": search.q,
         "resolved_path": ltree_path,
         "content": verses
+    })))
+}
+
+async fn handle_get_structure(
+    Path(path): Path<String>,
+    State(pool): State<sqlx::PgPool>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+
+    // 1. Get direct children of the path (e.g., chapters inside a book)
+    let children = match traversal::get_hierarchy(&pool, &path).await {
+        Ok(nodes) => nodes,
+        Err(e) => {
+            let error_response = json!({ "error": format!("Failed to fetch hierarchy: {}", e) });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Note we coulde also look up UUID for the `path` and pass it into
+    // `get_adjacent_nodes` here if we want to return the previous/next buttons
+    // in the same API call. For now, we will return the children structure
+    Ok(Json(json!({
+        "path": path,
+        "children": children
     })))
 }
