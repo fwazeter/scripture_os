@@ -6,9 +6,9 @@
 //! It relies heavily on the `node_aliases` table to map arbitrary abbreviations, alternate
 //! spellings, and differing language inputs to their permanent `ltree` base paths.
 
-use sqlx::PgPool;
 use regex::Regex;
 use anyhow::{Result, Context};
+use crate::repository::ScriptureRepository;
 
 /// Parses a human shorthand string and resolves it to a canonical `ltree` path.
 ///
@@ -30,7 +30,7 @@ use anyhow::{Result, Context};
 /// * `pool` - A shared reference to the Postgres connection pool.
 /// * `work_slug` - The specific work to search within (e.g., `"bible"` or `"quran_hafs"`).
 /// * `input` - The raw string provided by the user/client (e.g., `"Jn 17:3"`).
-pub async fn parse_address(pool: &PgPool, work_slug: &str, input: &str) -> Result<String> {
+pub async fn parse_address(repo: &dyn ScriptureRepository, work_slug: &str, input: &str) -> Result<String> {
     // 1. Extract book, chapter and verse using regex
     let re = Regex::new(r"^(?P<book>(\d\s)?[A-Za-z]+)\s+(?P<chapter>\d+):(?P<verse>\d+)$")
         .context("Failed to compile regex")?;
@@ -41,35 +41,18 @@ pub async fn parse_address(pool: &PgPool, work_slug: &str, input: &str) -> Resul
     let chapter = caps.name("chapter").unwrap().as_str();
     let verse = caps.name("verse").unwrap().as_str();
 
-    // 2. Query the DB to resolve the alias to the canonical ltree path
-    // We join `nodes` and `node_aliases` to find the base path for the book.
-    let record = sqlx::query!(
-        r#"
-        SELECT n.path::text as base_path
-        FROM node_aliases na
-        JOIN nodes n ON na.node_id = n.id
-        JOIN works w ON n.work_id = w.id
-        WHERE na.alias ILIKE $1 AND w.slug = $2
-        LIMIT 1
-        "#,
-        alias_input,
-        work_slug,
-    )
-        .fetch_optional(pool)
-        .await?;
+    let base_path = repo.resolve_address(work_slug, alias_input).await?;
 
-    // 3. Assemble final ltree path
-    if let Some(row) = record {
-        // e.g. base_path = "bible.nt.john", chapter = "3", verse = "16"
-        let path = row.base_path.unwrap_or_default();
+    if let Some(path) = base_path {
         Ok(format!("{}.{}.{}", path, chapter, verse))
     } else {
-        anyhow::bail!("Book alias '{}' not found in work '{}", alias_input, work_slug)
+        anyhow::bail!("Book alias '{}' not found", alias_input)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::repository::postgres::PostgresRepository;
     use super::*;
 
     #[tokio::test]
@@ -77,8 +60,10 @@ mod tests {
         let pool = crate::test_utils::setup_db().await;
         crate::test_utils::seed_universal_data(&pool).await;
 
+        let repo = PostgresRepository::new(pool);
+
        // Seed data maps "Jn" -> "bible_test.nt.john"
-        let ltree_path = parse_address(&pool, "bible", "Jn 17:3").await.unwrap();
+        let ltree_path = parse_address(&repo, "bible", "Jn 17:3").await.unwrap();
 
         // 5. Assert
         assert_eq!(ltree_path, "bible.nt.john.17.3");

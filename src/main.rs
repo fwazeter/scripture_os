@@ -11,11 +11,20 @@ use std::net::SocketAddr;
 use dotenvy:: dotenv;
 use serde_json::{Value, json};
 
+// for abstraction of db
+use std:: sync::Arc;
+use scripture_os::repository::{ScriptureRepository, PostgresRepository};
+
+
 // Struct to parse the `?q=...` from the URL
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub q: String,
 }
+
+
+// Use Arc<dyn ...> to allow sharing trait across web threads
+type AppState = Arc<dyn ScriptureRepository>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,11 +38,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&db_url)
         .await?;
 
+    // instantiate and wrap the repo
+    let repo: AppState = Arc::new(PostgresRepository::new(pool));
+
     // Define routes
     let app = Router::new()
         .route("/v1/read/{work_slug}", get(handle_read_scripture))
         .route("/v1/structure/{path}", get(handle_get_structure))
-        .with_state(pool);
+        .with_state(repo);
 
     // Start server
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -49,11 +61,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn handle_read_scripture(
     Path(work_slug): Path<String>,
     Query(search): Query<SearchQuery>,
-    State(pool): State<sqlx::PgPool>,
+    State(repo): State<AppState>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
 
     // Engine 1: Resolution (Convert "Jn 17:3" -> "bible_int.nt.john.17.3")
-    let ltree_path = match resolution::parse_address(&pool, &work_slug, &search.q).await {
+    let ltree_path = match resolution::parse_address(repo.as_ref(), &work_slug, &search.q).await {
         Ok(path) => path,
         Err(e) => {
             let error_response = json!({ "error": format!("Could not resolve address: {}", e) });
@@ -62,7 +74,7 @@ async fn handle_read_scripture(
     };
 
     // Engine 2: Content (Fetch actual text using ltree path)
-    let verses = match content::fetch_text(&pool, &ltree_path).await {
+    let verses = match content::fetch_text(repo.as_ref(), &ltree_path).await {
         Ok(v) => v,
         Err(e) => {
             let error_response = json!({ "error": format!("Database error: {}", e) });
@@ -80,11 +92,11 @@ async fn handle_read_scripture(
 
 async fn handle_get_structure(
     Path(path): Path<String>,
-    State(pool): State<sqlx::PgPool>,
+    State(repo): State<AppState>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
 
     // 1. Get direct children of the path (e.g., chapters inside a book)
-    let children = match traversal::get_hierarchy(&pool, &path).await {
+    let children = match traversal::get_hierarchy(repo.as_ref(), &path).await {
         Ok(nodes) => nodes,
         Err(e) => {
             let error_response = json!({ "error": format!("Failed to fetch hierarchy: {}", e) });

@@ -5,4 +5,5 @@ pub mod engines {
     pub mod traversal;
 }
 
+pub mod repository;
 pub mod test_utils;
