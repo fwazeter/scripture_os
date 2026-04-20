@@ -1,5 +1,3 @@
-#![cfg(test)] // Ensures file is only compiled during testing.
-
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use dotenvy::dotenv;
 use std::env;

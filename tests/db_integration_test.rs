@@ -1,12 +1,11 @@
-pub mod common;
-
 use scripture_os::engines::{content, resolution, traversal};
+use scripture_os::test_utils;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_end_to_end_routing_and_fetching() {
-    let pool = common::setup_db().await;
-    common::seed_universal_data(&pool).await;
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
 
     // 1. Resolution Engine: User searches for "Jn 17:3" in the "bible" work
     let resolved_path = resolution::parse_address(&pool, "bible", "Jn 17:3").await.unwrap();
@@ -28,8 +27,8 @@ async fn test_end_to_end_routing_and_fetching() {
 
 #[tokio::test]
 async fn test_bible_vs_tanakh_psalm_shift() {
-    let pool = common::setup_db().await;
-    common::seed_universal_data(&pool).await;
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
 
     // Christian bible groups title into a single unnumbered block (indices 1000 & 1001)
     let bible_title = content::fetch_text(&pool, "bible.ot.psalms.51.title").await.unwrap();
@@ -48,8 +47,8 @@ async fn test_bible_vs_tanakh_psalm_shift() {
 
 #[tokio::test]
 async fn test_quran_hafs_vs_warsh_shift() {
-    let pool = common::setup_db().await;
-    common::seed_universal_data(&pool).await;
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
 
     // Hafs 1:1 explicitly includes the Basmala (Index 2000)
     let hafs_v1 = content::fetch_text(&pool, "hafs.sura.1.1").await.unwrap();
@@ -64,8 +63,8 @@ async fn test_quran_hafs_vs_warsh_shift() {
 
 #[tokio::test]
 async fn test_rigveda_overlapping_hierarchies() {
-    let pool = common::setup_db().await;
-    common::seed_universal_data(&pool).await;
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
 
     // Fetch via the Theological / Author System (Mandala)
     let mandala_texts = content::fetch_text(&pool, "rigveda.mandala.1.sukta.1.mantra.1").await.unwrap();
@@ -83,8 +82,8 @@ async fn test_rigveda_overlapping_hierarchies() {
 
 #[tokio::test]
 async fn test_traversal_adjacency_across_shifts() {
-    let pool = common::setup_db().await;
-    common::seed_universal_data(&pool).await;
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
 
     // Target: Hafs Sura 1:1 (ID: ...0A06)
     let hafs_1_1_id = Uuid::parse_str("00000000-0000-0000-0000-000000000A06").unwrap();

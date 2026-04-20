@@ -5,5 +5,4 @@ pub mod engines {
     pub mod traversal;
 }
 
-#[cfg(test)]
 pub mod test_utils;

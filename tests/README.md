@@ -1,0 +1,2 @@
+# Todo
+Note: Now that the gating is removed, this code will be part of your library. This is actually a standard practice for "Test Helper" libraries. If you are worried about the seed data bloating your production binary later, you can eventually move the seeding logic into a separate dev-dependency or a feature flag.
