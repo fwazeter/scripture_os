@@ -5,7 +5,6 @@ use anyhow::{Result, Context};
 /// Resolves a human-readable query like "John 3:16" into an ltree path using DB aliases.
 pub async fn parse_address(pool: &PgPool, work_slug: &str, input: &str) -> Result<String> {
     // 1. Extract book, chapter and verse using regex
-    // Matches "Jn 17:3", "John 17:3", "1 John 17:3", etc.
     let re = Regex::new(r"^(?P<book>(\d\s)?[A-Za-z]+)\s+(?P<chapter>\d+):(?P<verse>\d+)$")
         .context("Failed to compile regex")?;
 
