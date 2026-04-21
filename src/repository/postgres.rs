@@ -18,7 +18,13 @@ use async_trait::async_trait;
 use uuid::Uuid;
 use anyhow::Result;
 
-use crate::models::{HierarchyNode, Adjacency, ScriptureContent};
+use crate::models::{
+    HierarchyNode,
+    Adjacency,
+    ScriptureContent,
+    SearchMatch,
+    Pagination
+};
 use super::ScriptureRepository;
 
 pub struct PostgresRepository {
@@ -238,5 +244,81 @@ impl ScriptureRepository for PostgresRepository {
             .await?;
 
         Ok(record.and_then(|r| r.base_path))
+    }
+
+    /// ## `search`
+    /// ### SQL Quirk: Postgres FTS (Full-Text Search)
+    /// 1. `to_tsvector`: Converts the body text into searchable tokens.
+    /// 2. `websearch_to_tsquery`: Converts user input ("holy spirit") into a boolean query.
+    /// 3. `ts_rank`: Calculates the `relevance_score` to sort the best matches first.
+    /// 4. `ts_headline`: Generates a short snippet wrapping the matched words in `<b>` tags.
+    ///
+    /// ### Design Decision: Scoped Search
+    /// If `path_scope` is provided, we use the `ltree` descendant oeprator `<@` to only
+    /// search within a specific book or testament.
+    async fn search(
+        &self,
+        query: &str,
+        path_scope: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Pagination<SearchMatch>> {
+        // Step 1: Count total records for pagination
+        // In a massive production DB, this would need to be cache, but for now we'l do a live count.
+        // todo caching for big production dbs
+        let count_query = r#"
+            SELECT COUNT(*)
+            FROM texts t
+            JOIN editions e ON t.edition_id = e.id
+            JOIN nodes n ON e.work_id = n.work_id AND t.absolute_index BETWEEN n.start_index AND n.end_index
+            WHERE to_tsvector('english', t.body_text) @@ websearch_to_tsquery('english', $1)
+            AND ($2::text IS NULL OR n.path <@ $2::text::ltree)
+            "#;
+
+        let total_records: i64 = sqlx::query_scalar(count_query)
+            .bind(query)
+            .bind(path_scope)
+            .fetch_one(&self.pool)
+            .await?;
+
+        // Step 2: Fetch the actual ranked and snippeted results
+        let search_query = r#"
+            WITH search_results AS (
+                SELECT
+                    n.id as node_id,
+                    n.path::text as path,
+                    e.name as edition_name,
+                    ts_headline('english', t.body_text, websearch_to_tsquery('english', $1), 'StartSel=<b>, StopSel=</b>') as snippet,
+                    ts_rank(to_tsvector('english', t.body_text), websearch_to_tsquery('english', $1)) as relevance_score
+                FROM texts t
+                JOIN editions e ON t.edition_id = e.id
+                JOIN nodes n ON e.work_id = n.work_id AND t.absolute_index BETWEEN n.start_index AND n.end_index
+                WHERE to_tsvector('english', t.body_text) @@ websearch_to_tsquery('english', $1)
+                AND ($2::text IS NULL OR n.path <@ $2::text::ltree)
+            )
+            SELECT * FROM search_results
+            ORDER BY relevance_score DESC
+            LIMIT $3 OFFSET $4
+            "#;
+
+        let matches = sqlx::query_as::<_, SearchMatch>(search_query)
+            .bind(query)
+            .bind(path_scope)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
+
+        // Calculate pagination metadata
+        let total_pages = (total_records as f64 / limit as f64).ceil() as i64;
+        let current_page = ( offset / limit ) +1;
+        
+        Ok(Pagination{
+            data: matches,
+            total_records,
+            current_page,
+            total_pages,
+            has_next: current_page < total_pages,
+        })
     }
 }

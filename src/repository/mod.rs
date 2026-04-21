@@ -17,7 +17,13 @@ pub use self::postgres::PostgresRepository;
 
 use anyhow::Result;
 use uuid::Uuid;
-use crate::models::{HierarchyNode, Adjacency, ScriptureContent};
+use crate::models::{
+    HierarchyNode,
+    Adjacency,
+    ScriptureContent,
+    SearchMatch,
+    Pagination
+};
 use async_trait::async_trait;
 
 /// The core trait for all data operations in Scripture OS.
@@ -103,4 +109,21 @@ pub trait ScriptureRepository: Send + Sync {
     /// **AI Prompt Hint:** If the alias is not found, return `Ok(None)` rather
     /// than an error, as a missing alias is a valid logical outcome.
     async fn resolve_address(&self, work_slug: &str, alias: &str) -> Result<Option<String>>;
+
+    /// ## `search`
+    /// **Parameters** /// * `query: &str` (The raw user search string).
+    /// * `path_scope: Option<&str>` (An optional LTREE path to restrict the search, e.g., "bible.nt").
+    /// * `limit: i64`, `offset: i64` (For pagination)
+    ///
+    /// ### Architectural Design Decision: Delegated FTS
+    /// Full-Text Search (FTS) is highly database specific. By placing this in the repository,
+    /// we allow Postgres to use its native `ts_vector` and `ts_headline` functions, keeping
+    /// the Service Layer ignorant of the indexing strategy.
+    async fn search(
+        &self,
+        query: &str,
+        path_scope: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Pagination<SearchMatch>>;
 }

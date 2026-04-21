@@ -2,12 +2,20 @@ use anyhow::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::models::{HierarchyNode, Adjacency, ScriptureContent, Comparison};
+use crate::models::{
+    HierarchyNode,
+    Adjacency,
+    ScriptureContent,
+    Comparison,
+    SearchMatch,
+    Pagination
+};
 
 // Export the submodules
 pub mod content;
 pub mod resolution;
 pub mod traversal;
+pub mod search;
 
 // -- Service Layer Contracts ---
 
@@ -39,4 +47,11 @@ pub trait ResolutionEngine: Send + Sync {
 pub trait TraversalEngine: Send + Sync {
     async fn get_hierarchy(&self, parent_path: &str) -> Result<Vec<HierarchyNode>>;
     async fn get_adjacent_nodes(&self, node_id: Uuid) -> Result<Adjacency>;
+}
+
+/// Discovery and search engine trait
+#[async_trait]
+pub trait SearchEngine: Send + Sync {
+    /// Performs a keyword search, optionally scoped to a specific hierarchy path.
+    async fn keyword_search(&self, query: &str, scope: Option<&str>, page: i64) -> Result<Pagination<SearchMatch>>;
 }
