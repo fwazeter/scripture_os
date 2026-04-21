@@ -11,10 +11,11 @@ This document tracks the immediate technical tasks required to fulfill the Scrip
     - [x] Dual-Track Testing Compliance.
       - [x] Added `mod mock_tests` for the Content Engine to verify grouping logic in isolation.
       - [x]Updated `mod tests` with integration tests for `get_comparison`.
-- [ ] **Bootstrap Search Engine Infrastructure**
-    - [ ] Define `SearchEngine` trait in `src/engines/mod.rs`.
-    - [ ] Implement `PostgresRepository::search` using GIN indexes and Full-Text Search (FTS).
-    - [ ] Implement `CoreSearchEngine` with support for `keyword_search` returning `Pagination<SearchMatch>`.
+- [X] **Bootstrap Search Engine Infrastructure**
+    - [x] Define `SearchEngine` trait in `src/engines/mod.rs`.
+    - [x] Implement `PostgresRepository::search` using GIN indexes and Full-Text Search (FTS).
+    - [x] Implement `CoreSearchEngine` with support for `keyword_search` returning `Pagination<SearchMatch>`.
+    - [x] ADd global integration tests in `tests/search_test.rs`.
 
 ## 🟨 Medium Priority: Advanced Logic
 

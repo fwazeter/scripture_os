@@ -173,6 +173,16 @@ mod mock_tests {
         }
         async fn fetch_text(&self, _path: &str) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
         async fn resolve_address(&self, _w: &str, _a: &str) -> Result<Option<String>> { Ok(None) }
+
+        async fn search(
+            &self,
+            _query: &str,
+            _scope: Option<&str>,
+            _limit: i64,
+            _offset: i64
+        ) -> Result<crate::models::Pagination<crate::models::SearchMatch>> {
+            unimplemented!("Search is not tested in this mock")
+        }
     }
 
     #[tokio::test]

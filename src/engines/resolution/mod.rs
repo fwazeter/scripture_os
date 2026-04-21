@@ -110,3 +110,53 @@ mod tests {
         assert_eq!(ltree_path, "bible.nt.john.17.3");
     }
 }
+
+// --- Track B: Isolated Mock Tests ---
+#[cfg(test)]
+mod mock_tests {
+    use super::*;
+    use crate::models::{HierarchyNode, Adjacency, ScriptureContent, SearchMatch, Pagination};
+    use uuid::Uuid;
+
+    struct MockRepository;
+
+    #[async_trait]
+    impl ScriptureRepository for MockRepository {
+        async fn resolve_address(&self, work_slug: &str, alias: &str) -> Result<Option<String>> {
+            // Mock a successful hit only for a specific test case
+            if work_slug == "mock_work" && alias == "MockAlias" {
+                Ok(Some("mock.canonical.path".to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        // Stubs for remaining trait requirements
+        async fn get_hierarchy(&self, _p: &str) -> Result<Vec<HierarchyNode>> { Ok(vec![]) }
+        async fn get_adjacent_nodes(&self, _id: Uuid) -> Result<Adjacency> {
+            Ok(Adjacency { previous: None, next: None })
+        }
+        async fn fetch_text(&self, _p: &str) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
+        async fn search(&self, _q: &str, _s: Option<&str>, _l: i64, _o: i64) -> Result<Pagination<SearchMatch>> {
+            unimplemented!("Search not tested here")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolution_logic_with_mock() {
+        let repo = Arc::new(MockRepository);
+        let engine = CoreResolutionEngine::new(repo);
+
+        // Test 1: Valid Regex and valid alias resolution
+        let res = engine.parse_address("mock_work", "MockAlias 3:16").await.unwrap();
+        assert_eq!(res, "mock.canonical.path.3.16");
+
+        // Test 2: Invalid format (missing colon) should fail the Regex immediately
+        let err_format = engine.parse_address("mock_work", "MockAlias 3 16").await;
+        assert!(err_format.is_err());
+
+        // Test 3: Valid Regex but unknown alias (repo returns None)
+        let err_alias = engine.parse_address("mock_work", "UnknownBook 1:1").await;
+        assert!(err_alias.is_err());
+    }
+}

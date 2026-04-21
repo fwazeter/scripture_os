@@ -312,7 +312,7 @@ impl ScriptureRepository for PostgresRepository {
         // Calculate pagination metadata
         let total_pages = (total_records as f64 / limit as f64).ceil() as i64;
         let current_page = ( offset / limit ) +1;
-        
+
         Ok(Pagination{
             data: matches,
             total_records,
