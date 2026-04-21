@@ -19,7 +19,14 @@ async fn test_theological_vs_authorial_overlapping_hierarchies() {
     // Architectural Design Decision: Sequence-to-Address Assembly
     // Different address paths must resolve to the exact same text index.
     assert_eq!(mandala[0].absolute_index, 3000);
-    assert_eq!(mandala, ashtaka);
+    assert_eq!(mandala.len(), 2, "Should retrieve the Sanskrit and English translation");
+
+    // Verify that the texts fetched from both paths are identical
+    for (m_text, a_text) in mandala.iter().zip(ashtaka.iter()) {
+        assert_eq!(m_text.absolute_index, a_text.absolute_index);
+        assert_eq!(m_text.body_text, a_text.body_text);
+        assert_eq!(m_text.edition_name, a_text.edition_name);
+    }
 }
 
 #[tokio::test]

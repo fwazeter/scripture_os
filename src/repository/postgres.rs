@@ -157,42 +157,45 @@ impl ScriptureRepository for PostgresRepository {
     /// In the Stand-off Markup model, a node (like a Chapter) is a pointer to a range of absolute indices.
     ///
     /// ### Design Decision: Two-Step Resolution
-    /// 1. **Boundary Resolution:** Fetches `start_index` and `end_index` from the `nodes` table.
+    /// 1. **Boundary Resolution:** Fetches the ID, `work_id`, `start_index` and `end_index` from the `nodes` table.
     /// 2. **Content Aggregation:** Queries the `texts` table for all rows falling between those bounds.
     ///
-    /// ### SQL Quirk: Range-Based Aggregation
-    /// We use a `BETWEEN` query on `absolute_index`. To ensure translations remain linked to the correct work,
-    /// we filter `edition_id` through a subquery that validates the `work_id` of the provided path.
-    ///
-    /// **AI Prompt Hint:** If the user asks for "Side-by-Side" views, the ordering `e.is_source DESC`
-    /// ensures original manuscripts (Greek/Hebrew) are always the first elements in the returned vector.
+    /// ### SQL Quirk: Context Injection
+    /// Because the `texts` table does not inherently know its hierarchical path (Stand-off markup),
+    /// we dynamically inject `$1` (node_id) and `$2` (path) directly into the SELECT projection.
+    /// We also inject `NULL::jsonb` to fulfill the `translation_metadata` Option field.
     async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
-        // 1. Fetch the range bounds for the requested path
-        let bounds = sqlx::query!(
+        // 1. Fetch the range bounds, ID, and work_id for the requested path
+        let target_node = sqlx::query!(
             r#"
-            SELECT start_index, end_index FROM nodes WHERE path = $1::text::ltree
+            SELECT id, work_id, start_index, end_index FROM nodes WHERE path = $1::text::ltree
             "#,
             path
         ).fetch_one(&self.pool).await?;
 
-        // 2. Fetch all texts that fall between those bounds
+        // 2. Fetch texts within those bounds, and inject the node context into the response
         let contents = sqlx::query_as::<_, ScriptureContent>(
             r#"
                 SELECT
+                    $1::uuid as node_id,
+                    $2::text as path,
                     t.body_text,
                     e.name as edition_name,
                     e.language_code,
-                    t.absolute_index
+                    t.absolute_index,
+                    NULL::jsonb as translation_metadata
                 FROM texts t
                 JOIN editions e ON t.edition_id = e.id
-                WHERE t.absolute_index BETWEEN $1 and $2
-                    AND e.work_id = (SELECT work_id FROM nodes WHERE path = $3::text::ltree)
+                WHERE t.absolute_index BETWEEN $3 and $4
+                    AND e.work_id = $5::uuid
                 ORDER BY t.absolute_index ASC, e.is_source DESC
                 "#
         )
-            .bind(bounds.start_index)
-            .bind(bounds.end_index)
+            .bind(target_node.id)
             .bind(path)
+            .bind(target_node.start_index)
+            .bind(target_node.end_index)
+            .bind(target_node.work_id)
             .fetch_all(&self.pool)
             .await?;
 
