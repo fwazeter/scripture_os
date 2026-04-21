@@ -42,6 +42,6 @@ The system is divided into three distinct layers:
 
 ## 🛠️ Usage
 Scripture OS provides specialized endpoints for navigating and retrieving text:
-* **Fetch Content:** `GET /api/v1/content/bible.nt.john.3.16`
+* **Fetch Content:** `GET /api/v1/content/bible.nt.john.17.3`
 * **Explore Hierarchy:** `GET /api/v1/hierarchy/bible.nt.john`
-* **Resolve Shorthand:** `GET /api/v1/resolve/bible/Jn 3:16`
+* **Resolve Shorthand:** `GET /api/v1/resolve/bible/Jn 17:3`
