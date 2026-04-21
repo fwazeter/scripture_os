@@ -45,3 +45,6 @@ Scripture OS provides specialized endpoints for navigating and retrieving text:
 * **Fetch Content:** `GET /api/v1/content/bible.nt.john.17.3`
 * **Explore Hierarchy:** `GET /api/v1/hierarchy/bible.nt.john`
 * **Resolve Shorthand:** `GET /api/v1/resolve/bible/Jn 17:3`
+
+## 🗺️ Roadmap
+Track our active development and upcoming technical decisions in the [Active Roadmap](docs/decisions/todo.md).
