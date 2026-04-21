@@ -9,6 +9,7 @@
 //! Scripture OS separates "Addressing" from "Content". The Traversal engine is
 //! concerned exclusively with "Addressing"—finding where a user is and where
 //! they can go next.
+
 use std::sync::Arc;
 use uuid::Uuid;
 use anyhow::Result;
@@ -31,7 +32,7 @@ pub struct CoreTraversalEngine {
 }
 
 impl CoreTraversalEngine {
-    /// Bootstraps the engine by injecting the required data layer repostiory
+    /// Bootstraps the engine by injecting the required data layer repository
     pub fn new(repo: Arc<dyn ScriptureRepository + Send + Sync>) -> Self {
         Self { repo }
     }
@@ -69,9 +70,8 @@ impl TraversalEngine for CoreTraversalEngine {
         self.repo.get_hierarchy(parent_path).await
     }
 
-    /// ## `get_adjacent`
-    /// **Parameters:** /// * `current_node_id: Uuid` (The unique ID of the node currently in view).
-    /// *
+    /// ## `get_adjacent_nodes`
+    /// **Parameters:** /// * `current_node: Uuid` (The unique ID of the node currently in view).
     ///
     /// ### Architectural Design Decision: Contextual Continuity
     /// Scripture navigation requires maintaining the "type context". If a user is
@@ -93,61 +93,19 @@ impl TraversalEngine for CoreTraversalEngine {
     /// may need to create a new version of this function that ignores `node_type`
     /// to allow jumping across different types of nodes (e.g., from the end
     /// of a Testament to the start of a Gospel).
-    async fn get_adjacent(
+    async fn get_adjacent_nodes(
         &self,
         current_node: Uuid
     ) -> Result<Adjacency> {
         // todo user permission checks can be added here before
         //     letting them navigate to an adjacent node, that business logic
-        //      would go here, completely separate from the SQL CTE.
+        //     would go here, completely separate from the SQL CTE.
         // Delegates the complex CTE lookup to the repository
         self.repo.get_adjacent_nodes(current_node).await
     }
 }
 
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::repository::postgres::PostgresRepository;
-
-    #[tokio::test]
-    async fn test_get_hierarchy_hafs() {
-        let pool = crate::test_utils::setup_db().await;
-        crate::test_utils::seed_universal_data(&pool).await;
-
-        // instantiate the repo
-        let repo = PostgresRepository::new(pool);
-
-        // Ask for children of Hafs sura 1
-        let children = get_hierarchy(&repo, "hafs.sura.1").await.unwrap();
-
-        // The seed data has Ayah 1 (Basmala) and Ayah 2
-        assert_eq!(children.len(), 2);
-        assert_eq!(children[0].path, "hafs.sura.1.1");
-        assert_eq!(children[1].path, "hafs.sura.1.2");
-    }
-
-    #[tokio::test]
-    async fn test_get_adjacent_nodes_hafs() {
-        let pool = crate::test_utils::setup_db().await;
-        crate::test_utils::seed_universal_data(&pool).await;
-        let repo = PostgresRepository::new(pool);
-
-        // Target: Hafs Sura 1:1 (ID: ...0A06)
-        let target_node = Uuid::parse_str("00000000-0000-0000-0000-000000000A06").unwrap();
-        let adjacency = get_adjacent(&repo, target_node).await.unwrap();
-
-        // Next should be Hafs Sura 1:2
-        assert!(adjacency.next.is_some());
-        assert_eq!(adjacency.next.unwrap().path, "hafs.sura.1.2");
-
-        // Previous should be None since it's the first ayah
-        assert!(adjacency.previous.is_none());
-    }
-}
-
+// --- Integration Tests (Track A) ---
 #[cfg(test)]
 mod tests {
     use crate::repository::postgres::PostgresRepository;
@@ -193,6 +151,7 @@ mod tests {
     }
 }
 
+// --- Mock Tests (Track B) ---
 #[cfg(test)]
 mod mock_tests {
     use super::*;
