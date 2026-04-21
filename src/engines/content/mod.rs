@@ -13,7 +13,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::models::ScriptureContent;
+use crate::models::{ScriptureContent, Comparison};
 use crate::repository::ScriptureRepository;
 use super::ContentEngine;
 
@@ -68,9 +68,42 @@ impl ContentEngine for CoreContentEngine {
         // Delegates the specific range-finding and text-fetching logic to the repository.
         self.repo.fetch_text(path).await
     }
+
+    /// ## `get_comparison`
+    /// ### Architectural Design Decision: Node-Centric Grouping
+    /// Leverages the respoistory's `absolute_index` sorting to sequentially group
+    /// flat `ScriptureContent` rows into structured `Comparison` blocks. This
+    /// guarantees that translations of the exact same semantic unit stay locked together.
+    async fn get_comparison(&self, path: &str) -> Result<Vec<Comparison>> {
+        let contents = self.repo.fetch_text(path).await?;
+
+        if contents.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut comparisons: Vec<Comparison> = Vec::new();
+
+        // Group contiguous content rows that share the same node_id
+        for content in contents {
+            if let Some(comp) = comparisons.last_mut().filter(|c| c.node_id == content.node_id) {
+                // We are already building a comparison for this node, add to it
+                comp.contents.push(content);
+            } else {
+                // This is a new node, start a new Comparison block
+                comparisons.push(Comparison {
+                    node_id: content.node_id,
+                    path: content.path.clone(),
+                    contents: vec![content],
+                });
+            }
+        }
+
+        Ok(comparisons)
+    }
 }
 
 
+// --- Track A: Concrete Integration Tests ---
 #[cfg(test)]
 mod tests {
     use crate::repository::postgres::PostgresRepository;
@@ -81,17 +114,88 @@ mod tests {
         let pool = crate::test_utils::setup_db().await;
         crate::test_utils::seed_universal_data(&pool).await;
 
-        // 1. Initialize the concrete repository and wrap it in an Arc for DI
         let repo = Arc::new(PostgresRepository::new(pool));
-
-        // 2. Inject the repository into the Engine
         let engine = CoreContentEngine::new(repo);
 
-        // 3. Call the trait method on the engine
-        // Bible groups both title segments into one node (indices 1000 and 1001)
         let results = engine.fetch_text("bible.ot.psalms.51.title").await.unwrap();
-
-        // Should return 6 rows: 2 indices (1000, 1001) * 3 Bible translations (KJV, NIV, LXX)
         assert_eq!(results.len(), 6);
+    }
+
+    // NEW: Integration test for get_comparison
+    #[tokio::test]
+    async fn test_get_comparison_groups_translations() {
+        let pool = crate::test_utils::setup_db().await;
+        crate::test_utils::seed_universal_data(&pool).await;
+
+        let repo = Arc::new(PostgresRepository::new(pool));
+        let engine = CoreContentEngine::new(repo);
+
+        // Fetch John 17:3
+        let comparisons = engine.get_comparison("bible.nt.john.17.3").await.unwrap();
+
+        // There should be exactly 1 node (John 17:3)
+        assert_eq!(comparisons.len(), 1);
+
+        // That single node should contain 2 translations (KJV and SBLGNT)
+        assert_eq!(comparisons[0].contents.len(), 2);
+        assert_eq!(comparisons[0].path, "bible.nt.john.17.3");
+    }
+}
+
+// --- Track B: Isolated Mock Tests ---
+// NEW: Testing the business logic without hitting a real database
+#[cfg(test)]
+mod mock_tests {
+    use super::*;
+    use crate::models::{HierarchyNode, Adjacency};
+    use uuid::Uuid;
+
+    struct MockRepository;
+
+    #[async_trait]
+    impl ScriptureRepository for MockRepository {
+        async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
+            let node_id = Uuid::new_v4();
+            // Return two fake rows for the same node to simulate translations
+            Ok(vec![
+                ScriptureContent {
+                    node_id,
+                    path: path.to_string(),
+                    body_text: "Mock English".to_string(),
+                    edition_name: "Mock_EN".to_string(),
+                    language_code: "en".to_string(),
+                    absolute_index: 100,
+                    translation_metadata: None,
+                },
+                ScriptureContent {
+                    node_id,
+                    path: path.to_string(),
+                    body_text: "Mock Greek".to_string(),
+                    edition_name: "Mock_GR".to_string(),
+                    language_code: "grc".to_string(),
+                    absolute_index: 100,
+                    translation_metadata: None,
+                }
+            ])
+        }
+
+        // Stub other required trait methods returning empty/default
+        async fn get_hierarchy(&self, _p: &str) -> Result<Vec<HierarchyNode>> { Ok(vec![]) }
+        async fn get_adjacent_nodes(&self, _id: Uuid) -> Result<Adjacency> {
+            Ok(Adjacency { previous: None, next: None })
+        }
+        async fn resolve_address(&self, _w: &str, _a: &str) -> Result<Option<String>> { Ok(None) }
+    }
+
+    #[tokio::test]
+    async fn test_comparison_grouping_logic() {
+        let repo = Arc::new(MockRepository);
+        let engine = CoreContentEngine::new(repo);
+
+        let comparisons = engine.get_comparison("mock.path").await.unwrap();
+
+        // The engine should group the 2 rows from the mock repo into 1 comparison block
+        assert_eq!(comparisons.len(), 1);
+        assert_eq!(comparisons[0].contents.len(), 2);
     }
 }

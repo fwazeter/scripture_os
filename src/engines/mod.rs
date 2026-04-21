@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::models::{HierarchyNode, Adjacency, ScriptureContent};
+use crate::models::{HierarchyNode, Adjacency, ScriptureContent, Comparison};
 
 // Export the submodules
 pub mod content;
@@ -16,6 +16,9 @@ pub mod traversal;
 pub trait ContentEngine: Send + Sync {
     /// Retrieves text segments for a given canonical ltree path.
     async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>>;
+
+    /// Groups translations by their shared canonical node for side-by-side viewing.
+    async fn get_comparison(&self, path: &str) -> Result<Vec<Comparison>>;
 
     // Future methods to implement:
     // async get_verse_bundle(&self, path: &str) -> Result<...>;

@@ -45,3 +45,22 @@ async fn test_cross_tradition_psalm_numbering_shifts() {
     let tanakh_v1 = engine.fetch_text("tanakh.ketuvim.psalms.51.1").await.unwrap();
     assert_eq!(tanakh_v1[0].absolute_index, 1000);
 }
+
+#[tokio::test]
+async fn test_comparison_engine_cross_tradition() {
+    let pool = test_utils::setup_db().await;
+    test_utils::seed_universal_data(&pool).await;
+
+    let repo = Arc::new(PostgresRepository::new(pool));
+    let engine = CoreContentEngine::new(repo);
+
+    // Using the new get_comparison feature on the Rigveda
+    let comparisons = engine.get_comparison("rigveda.mandala.1.sukta.1.mantra.1").await.unwrap();
+
+    // Verify it correctly grouped the data
+    assert_eq!(comparisons.len(), 1, "Should group into a single node block");
+
+    let contents = &comparisons[0].contents;
+    assert_eq!(contents.len(), 2, "Should contain Sanskrit and English editions");
+    assert_eq!(contents[0].absolute_index, 3000);
+}

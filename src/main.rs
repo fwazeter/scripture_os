@@ -48,9 +48,10 @@ async fn main() -> anyhow::Result<()> {
     // 3. Build Gateway Layer (Axum API)
     // Define routes
     let app = Router::new()
-        .route("/api/v1/content/*path", get(get_content))
-        .route("/api/v1/hierarchy/*path", get(get_hierarchy))
-        .route("/api/v1/resolve:work_slug/:address", get(resolve_address))
+        .route("/api/v1/content/{*path}", get(get_content))
+        .route("/api/v1/compare/{*path}", get(get_comparison))
+        .route("/api/v1/hierarchy/{*path}", get(get_hierarchy))
+        .route("/api/v1/resolve/{work_slug}/{address}", get(resolve_address))
         .with_state(app_state);
 
     // Start server
@@ -88,6 +89,16 @@ async fn resolve_address(
 ) -> Json<serde_json::Value> {
     match state.resolution.parse_address(&work_slug, &address).await {
         Ok(canonical_path) => Json(serde_json::json!({ "data": canonical_path })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+async fn get_comparison(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+) -> Json<serde_json::Value> {
+    match state.content.get_comparison(&path).await {
+        Ok(comparisons) => Json(serde_json::json!({ "data": comparisons })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
 }
