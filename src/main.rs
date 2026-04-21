@@ -24,7 +24,7 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL is not set in .env file");
@@ -57,6 +57,8 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server running on http://0.0.0.0:3000");
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
 }
 
 // --- Route Handlers ---
@@ -66,7 +68,7 @@ async fn get_content(
 ) -> Json<serde_json::Value> {
     match state.content.fetch_text(&path).await {
         Ok(text) => Json(serde_json::json!({ "data": text })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
 }
 
@@ -76,7 +78,7 @@ async fn get_hierarchy(
 ) -> Json<serde_json::Value> {
     match state.traversal.get_hierarchy(&path).await {
         Ok(nodes) => Json(serde_json::json!({ "data": nodes })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
 }
 
@@ -86,6 +88,6 @@ async fn resolve_address(
 ) -> Json<serde_json::Value> {
     match state.resolution.parse_address(&work_slug, &address).await {
         Ok(canonical_path) => Json(serde_json::json!({ "data": canonical_path })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
 }

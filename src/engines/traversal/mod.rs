@@ -119,11 +119,13 @@ mod tests {
         let repo = Arc::new(PostgresRepository::new(pool));
         let engine = CoreTraversalEngine::new(repo);
 
-        let hierarchy = engine.get_hierarchy("bible.ot.genesis").await.unwrap();
+        // FIX 1: Ask for Hafs sura 1, which actually exists in the seed data
+        let hierarchy = engine.get_hierarchy("hafs.sura.1").await.unwrap();
 
-        // Expecting Genesis 1 and Genesis 2 from seed data
+        // The seed data has Ayah 1 (Basmala) and Ayah 2
         assert_eq!(hierarchy.len(), 2);
-        assert_eq!(hierarchy[0].path, "bible.ot.genesis.1");
+        assert_eq!(hierarchy[0].path, "hafs.sura.1.1");
+        assert_eq!(hierarchy[1].path, "hafs.sura.1.2");
     }
 
     #[tokio::test]
@@ -132,15 +134,12 @@ mod tests {
         crate::test_utils::seed_universal_data(&pool).await;
 
         let repo = Arc::new(PostgresRepository::new(pool));
-        let engine = CoreTraversalEngine::new(repo.clone());
+        let engine = CoreTraversalEngine::new(repo);
 
-        let target_node = repo.resolve_address("quran", "hafs.sura.1.1").await.unwrap().unwrap();
-        let get_node = sqlx::query!("SELECT id FROM nodes WHERE path = $1::ltree", target_node)
-            .fetch_one(&*repo.pool)
-            .await
-            .unwrap();
+        // FIX 2: Revert to using the explicit UUID for Hafs Sura 1:1 from your original seed data
+        let target_node = Uuid::parse_str("00000000-0000-0000-0000-000000000A06").unwrap();
 
-        let adjacency = engine.get_adjacent_nodes(get_node.id).await.unwrap();
+        let adjacency = engine.get_adjacent_nodes(target_node).await.unwrap();
 
         // Next should be Hafs Sura 1:2
         assert!(adjacency.next.is_some());

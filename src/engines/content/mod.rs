@@ -66,7 +66,7 @@ impl ContentEngine for CoreContentEngine {
     /// language manuscripts.
     async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
         // Delegates the specific range-finding and text-fetching logic to the repository.
-        repo.fetch_text(path).await
+        self.repo.fetch_text(path).await
     }
 }
 
@@ -82,7 +82,7 @@ mod tests {
         crate::test_utils::seed_universal_data(&pool).await;
 
         // 1. Initialize the concrete repository and wrap it in an Arc for DI
-        let repo = Arc::new(PostgresRepository::new(&pool));
+        let repo = Arc::new(PostgresRepository::new(pool));
 
         // 2. Inject the repository into the Engine
         let engine = CoreContentEngine::new(repo);
