@@ -1,56 +1,72 @@
-# Scripture OS: Development Plan v0.1.3 to v0.1.4
+This final implementation plan for **Scripture OS** synthesizes the architectural refinements of **Plan V2** with the performance-first primitives of **Plan V1**. It adheres to the **"Data-as-Core, Logic-as-Plugin"** philosophy to ensure the system is modular, DRY, and re-usable.
+
+---
+
+# Scripture OS: Master Implementation Plan (v0.1.5)
 
 ## 📂 Status Summary
-* **Archived:** Phase 1 & 2 (Comparison Logic, Basic Search, Utility Versification Mapper) are 100% complete and moved to `docs/decisions/archive/`.
-* **Active Focus:** Transitioning the "Physical Spine" to a **Fractal Semantic Index** and abstracting Engine logic for **WASM Plugin** support.
+* **Strategy:** Implement **Fractal Semantic Indexing (FSI) v4.0** as the universal "Spine".
+* **Architecture:** Trait-based Dependency Injection (DI) with a decoupled Data Access Layer.
+* **MVP Goal:** Full ingestion of the Quran (Work 786) across three versions (Uthmani, Sahih, Pickthall) using word-level atoms.
 
 ---
 
-## 🟥 High Priority: The Hybrid Scripture Stack (Layer 1 & 2)
-The primary goal is to move from a static integer-based sequence to a high-precision, track-aware decimal sequence.
+## 🟥 Phase 1: The "Stable Bottom" (Infrastructure & Core DAL)
+*Goal: Establish the immutable coordinate system and the repository pattern.*
 
-### 1. Implement Fractal Semantic Indexing (FSI)
-* [ ] **Database Migration:** Alter `texts` and `nodes` tables to use `NUMERIC(20,10)` for `absolute_index`.
-* [ ] **Sequence Slot Management:** Create the `sequence_slots` table to provide immutable identities (UUIDs) for every atomized decimal coordinate.
-* [ ] **Rust Model Refactor:** Update `ScriptureContent` and `HierarchyNode` in `src/models.rs` to support decimal-based indexing.
-* [ ] **Ingestion Pipeline Update:** Update the internal seeder in `src/test_utils.rs` to support word-level atomization of `quran-uthmani.txt`.
+### 1. FSI v4.0 Schema & Newtypes
+* [ ] **Coordinate Struct:** Implement the 5-part `Coordinate` struct in `src/models.rs` using `#[repr(C)]` for hardware-native packing.
+* [ ] **Newtype Enforcement:** Wrap IDs in `WorkID(i32)`, `MacroID(i32)`, and `NamespaceID(i16)` to prevent type-mixing at compile time.
+* [ ] **LexKey Utility:** Build a DRY utility for Base-62 lexicographical string generation to allow infinite word-level insertion.
 
-### 2. WASM-Ready Engine Refactoring (Layer 3)
-Abstracting the engines to host external logic "Lenses".
-* [ ] **Engine Plugin Trait:** Define the `PluginHost` trait in `src/engines/mod.rs` to allow dynamic loading of WASM logic modules.
-* [ ] **Resolution Engine Decoupling:** Refactor `CoreResolutionEngine` to delegate shorthand resolution to a loaded plugin instead of hard-coded regex.
-* [ ] **Track-Aware Content Retrieval:** Update `CoreContentEngine` to support decimal track filtering (e.g., retrieving only Track 0 atoms).
+### 2. The Repository Abstraction
+* [ ] **Trait Definition:** Implement the `ScriptureRepository` trait in `src/repositories/mod.rs` to abstract all SQL logic.
+* [ ] **Postgres Implementation:** Create `PostgresRepository` using `sqlx`. Ensure all queries use `ltree` for hierarchical pathing.
+* [ ] **DRY Query Builders:** Create re-usable SQL fragment builders for common operations like "fetch by coordinate range" to avoid duplicating complex JOIN logic.
 
 ---
 
-## 🟨 Medium Priority: Advanced Logic & Ingestion
-Refining the interaction between the "Muscle" and the "Spine".
+## 🟨 Phase 2: The "Muscle" (Engines & WASM Host)
+*Goal: Build the service layer following the "Contract-First" standard.*
 
-### 3. Integrated Regex & Variant Support
-* [ ] **Regex Flexibility:** Update the `ResolutionEngine` to support non-numeric indicators (e.g., "17:3a") and multi-chapter ranges natively.
-* [ ] **Fractional Variant Alignment:** Implement logic in the `ContentEngine` to align multi-word translations (e.g., from `en.sahih.txt`) to single source atoms.
+### 3. Service Layer (Engines)
+* [ ] **Contract-First Traits:** Define `ResolutionEngine`, `ContentEngine`, and `TraversalEngine` traits before implementation.
+* [ ] **Dependency Injection:** Refactor engines to accept `Arc<dyn ScriptureRepository + Send + Sync>` via their `new()` constructors.
+* [ ] **Resolution Engine:** Implement the "Router" logic to map human shorthands to FSI v4.0 coordinates.
 
-### 4. Semantic Search Infrastructure (Layer 4)
-* [ ] **Vector Storage:** Implement `pgvector` columns in the `texts` table for semantic embeddings.
-* [ ] **Hybrid Search Engine:** Upgrade `CoreSearchEngine` to return results based on a weighted combination of FTS and Vector similarity.
-
----
-
-## 🟩 Low Priority: System Maturity
-Standardizing the Gateway and improving API stability.
-
-### 5. API & Error Standardization
-* [ ] **Traversal Pagination:** Refactor `get_hierarchy` to return `Pagination<HierarchyNode>` to prevent data flooding on large book requests.
-* [ ] **Domain-Specific Error Enum:** Replace `anyhow::Result` with a custom `ScriptureError` type mapping to specific HTTP status codes (404 for missing paths, 400 for bad coordinates).
-* [ ] **Metadata Discovery Routes:** Implement `GET /api/v1/metadata` to allow clients to discover available WASM plugins (Spines) and translations.
+### 4. WASM Plugin Host (The Lenses)
+* [ ] **Plugin Trait:** Define the standard `Lens` trait in WASM that allows external modules to process a stream of `ScriptureContent`.
+* [ ] **Wasmtime Integration:** Implement the `Wasmtime` runtime within the engine layer to load and execute `.wasm` plugins (e.g., a "Tajweed Lens" for Quranic analysis).
 
 ---
 
-## 🛠️ Module Development Checklist
-* [ ] **Section 1: Data Layer**: UNIQUE constraint enforced on `(edition_id, absolute_index)`.
-* [ ] **Section 2: Service Layer**: Every public engine function includes an `AI Prompt Hint`.
-* [ ] **Section 3: Gateway Layer**: Routes use Axum 0.7+ `{variable}` syntax.
+## 🟦 Phase 3: The Intelligence Tier (Performance & AI)
+*Goal: Enable sub-millisecond comparative theology.*
 
+### 5. Hardware-Accelerated Logic
+* [ ] **SIMD Hamming Filter:** Implement bitwise comparison for semantic hashes using `core::arch` (POPCNT).
+* [ ] **Zero-Copy Access:** Integrate `rkyv` for SSTable partitions to achieve zero-copy deserialization from disk.
+* [ ] **Rayon Parallelism:** Ensure all bulk-processing loops use `.par_iter()` for multi-core scaling.
 
+---
 
-*This TODO list is governed by the vision of a "Stable Bottom, Liquid Top." Changes to the core sequence slots (The Muscle) must be minimized once seeded, while Spines (The Plugins) should remain highly iterative.*
+## 🟩 Phase 4: System Integrity (Standards & Testing)
+*Goal: Enforce DRY principles and verify implementation.*
+
+### 6. DRY & Re-usability Steps
+* [ ] **Centralized Error Handling:** Replace `anyhow` with a domain-specific `ScriptureError` enum that provides consistent error codes across all engines.
+* [ ] **Generic Pagination:** Implement a `Pagination<T>` wrapper used by all traversal and search routes to prevent data flooding.
+* [ ] **Documentation Audit:** Ensure every public function contains the `Architectural Design Decision` and `AI Prompt Hint` headers as mandated by standards.
+
+### 7. Dual-Track Verification
+* [ ] **Track A (Integration):** Implement `tests/db_integration_test.rs` using `test_utils::setup_db()` for real-world validation.
+* [ ] **Track B (Mocks):** Implement `MockRepository` for every engine to test business logic (like coordinate math) in total isolation.
+
+---
+
+## 🛠️ Implementation Checklist for Every New Component
+1.  **Define the Trait:** Does a contract exist in `src/engines/mod.rs`?
+2.  **Apply Newtypes:** Are we passing raw integers where we should use `WorkID`?
+3.  **Inject Dependencies:** Are database pools hardcoded, or injected via `Arc<dyn Trait>`?
+4.  **Add AI Hints:** Is there an `AI Prompt Hint` in the docstring to guide future model-based edits?
+5.  **Check Memory Layout:** Is the struct using `SmallVec` for LexKeys to minimize heap allocations?
