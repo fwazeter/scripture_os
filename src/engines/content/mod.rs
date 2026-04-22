@@ -42,38 +42,35 @@ impl CoreContentEngine {
 #[async_trait]
 impl ContentEngine for CoreContentEngine {
     /// ## `fetch_text`
-    /// **Parameters:** /// * `path: &str` (The canonical `ltree` address to fetch, e.g., "bible.nt.john.1.1").
+    /// **Parameters:** /// * `start_path: &str` (The canonical address to begin retrieval).
+    /// * `end_path: Option<&str>` (Optional address to end retrieval for ranges).
     ///
     /// ### Architectural Design Decision: Sequence-to-Address Assembly
-    /// This function solves the problem of retrieving content for a structural node that
-    /// does not physically contain text. It translates a hierarchical "Address" into a
-    /// contiguous "Range" of text segments.
-    ///
-    /// ### Design Decision: Two-Step Resolution Process
-    /// 1. **Boundary Resolution:** The engine requests the start and end sequence indices
-    ///    for the provided path from the injected repository (`self.repo`).
-    /// 2. **Content Aggregation:** It then fetches every text segment falling within
-    ///    that sequence range across all available editions.
+    /// This function solves the problem of retrieving content for structural nodes that
+    /// do not physically contain text. It translates a hierarchical "Address"
+    /// into a contiguous "Range" of text segments in the universal sequence.
     ///
     /// ### Technical Context: Polymorphic Retrieval
     /// Because this logic is range-based, the exact same function handles fetching a
-    /// single verse, an entire chapter, or a whole book simply by providing an `ltree`
-    /// path of varying depth.
+    /// single verse or an entire chapter span by resolving the start and end
+    /// sequence indices and querying everything between them.
     ///
-    /// **AI Prompt Hint:** When modifying retrieval logic for "Parallel Reading" or
-    /// "Side-by-Side" views, ensure results are ordered by `absolute_index ASC` to
-    /// maintain reading flow, then by `is_source DESC` to prioritize original
-    /// language manuscripts.
+    /// **AI Prompt Hint:** Results are ordered by `absolute_index ASC` to maintain reading
+    /// flow, then by `is_source DESC` to prioritize original manuscripts.
     async fn fetch_text(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<ScriptureContent>> {
         // Delegates the specific range-finding and text-fetching logic to the repository.
         self.repo.fetch_text(start_path, end_path).await
     }
 
     /// ## `get_comparison`
+    /// **Parameters:** /// * `start_path: &str` (The canonical address to begin comparison).
+    /// * `end_path: Option<&str>` (Optional address to end comparison).
+    ///
     /// ### Architectural Design Decision: Node-Centric Grouping
-    /// Leverages the respoistory's `absolute_index` sorting to sequentially group
-    /// flat `ScriptureContent` rows into structured `Comparison` blocks. This
-    /// guarantees that translations of the exact same semantic unit stay locked together.
+    /// Leverages the repository's `absolute_index` sorting to sequentially group
+    /// flat `ScriptureContent` rows into structured `Comparison` blocks.
+    /// This guarantees that translations of the exact same semantic unit stay
+    /// locked together in parallel views.
     async fn get_comparison(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<Comparison>> {
         let contents = self.repo.fetch_text(start_path, end_path).await?;
 
@@ -117,7 +114,7 @@ mod tests {
         let repo = Arc::new(PostgresRepository::new(pool));
         let engine = CoreContentEngine::new(repo);
 
-        let results = engine.fetch_text("bible.ot.psalms.51.title").await.unwrap();
+        let results = engine.fetch_text("bible.ot.psalms.51.title", None).await.unwrap();
         assert_eq!(results.len(), 6);
     }
 
@@ -131,7 +128,7 @@ mod tests {
         let engine = CoreContentEngine::new(repo);
 
         // Fetch John 17:3
-        let comparisons = engine.get_comparison("bible.nt.john.17.3").await.unwrap();
+        let comparisons = engine.get_comparison("bible.nt.john.17.3", None).await.unwrap();
 
         // There should be exactly 1 node (John 17:3)
         assert_eq!(comparisons.len(), 1);
@@ -154,13 +151,13 @@ mod mock_tests {
 
     #[async_trait]
     impl ScriptureRepository for MockRepository {
-        async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
+        async fn fetch_text(&self, start_path: &str, _end_path: Option<&str>) -> Result<Vec<ScriptureContent>> {
             let node_id = Uuid::new_v4();
             // Return two fake rows for the same node to simulate translations
             Ok(vec![
                 ScriptureContent {
                     node_id,
-                    path: path.to_string(),
+                    path: start_path.to_string(),
                     body_text: "Mock English".to_string(),
                     edition_name: "Mock_EN".to_string(),
                     language_code: "en".to_string(),
@@ -169,7 +166,7 @@ mod mock_tests {
                 },
                 ScriptureContent {
                     node_id,
-                    path: path.to_string(),
+                    path: start_path.to_string(),
                     body_text: "Mock Greek".to_string(),
                     edition_name: "Mock_GR".to_string(),
                     language_code: "grc".to_string(),
@@ -202,7 +199,7 @@ mod mock_tests {
         let repo = Arc::new(MockRepository);
         let engine = CoreContentEngine::new(repo);
 
-        let comparisons = engine.get_comparison("mock.path").await.unwrap();
+        let comparisons = engine.get_comparison("mock.path", None).await.unwrap();
 
         // The engine should group the 2 rows from the mock repo into 1 comparison block
         assert_eq!(comparisons.len(), 1);

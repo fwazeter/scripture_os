@@ -34,6 +34,11 @@ struct SearchParams {
     page: Option<i64>,
 }
 
+#[derive(Deserialize)]
+struct ContentParams {
+    end_path: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -79,8 +84,9 @@ async fn main() -> anyhow::Result<()> {
 async fn get_content(
     State(state): State<AppState>,
     Path(path): Path<String>,
+    Query(params): Query<ContentParams>,
 ) -> Json<serde_json::Value> {
-    match state.content.fetch_text(&path).await {
+    match state.content.fetch_text(&path, params.end_path.as_deref()).await {
         Ok(text) => Json(serde_json::json!({ "data": text })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
@@ -109,8 +115,9 @@ async fn resolve_address(
 async fn get_comparison(
     State(state): State<AppState>,
     Path(path): Path<String>,
+    Query(params): Query<ContentParams>,
 ) -> Json<serde_json::Value> {
-    match state.content.get_comparison(&path).await {
+    match state.content.get_comparison(&path, params.end_path.as_deref()).await {
         Ok(comparisons) => Json(serde_json::json!({ "data": comparisons })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }

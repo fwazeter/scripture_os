@@ -19,9 +19,10 @@ This document tracks the immediate technical tasks required to fulfill the Scrip
 
 ## 🟨 Medium Priority: Advanced Logic
 
-- [ ] **Phase 3: Versification Mapper Utility**
-    - [ ] Build standalone utility for tradition-based numbering overrides.
-    - [ ] Integrate mapper into `ResolutionEngine` to align Tanakh and Bible Psalm numbering.
+- [x] **Phase 3: Versification Mapper Utility**
+    - [x] Build standalone utility for tradition-based numbering overrides.
+    - [x] Integrate mapper into `ResolutionEngine` to align Tanakh and Bible Psalm numbering.
+    - [x] *Completed Prerequisite: Boundary Struct & Range Support architecture wired to Database.*
 - [ ] **Regex Flexibility in Resolution Engine**
     - [ ] Update regex to support verse ranges (e.g., "17:2-3").
     - [ ] Update regex to support non-numeric indicators (e.g., "17:3a").

@@ -1,10 +1,11 @@
 //! # Search Engine (The "Finder")
 //!
-//! This engine handles discovery and full-text search across the scriptural library.
+//! This engine handles discovery and full-text search across the library.
 //!
 //! ### Architectural Design Decision: Delegated FTS
-//! The Search Engine validates inputs and handles pagination bound, but delegates
-//! the heavy lifting of text indexing, ranking and snippet generation to the repository.
+//! The Search Engine validates inputs and handles pagination bounds, but delegates
+//! text indexing, ranking, and snippet generation to the repository to leverage
+//! native PostgreSQL FTS capabilities.
 use std::sync::Arc;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -31,14 +32,20 @@ impl CoreSearchEngine {
 #[async_trait]
 impl SearchEngine for CoreSearchEngine {
     /// ## `keyword_search`
-    /// **Parameters** /// * `query: &str` (The user's raw search string).
-    /// * `scope: Option<&str>` (Optional LTREE path to restrict the search bounds)
+    /// **Parameters:** /// * `query: &str` (The user's raw search string).
+    /// * `scope: Option<&str>` (Optional LTREE path to restrict search bounds).
     /// * `page: i64` (The requested page number).
     ///
     /// ### Design Decision: Input Validation & Pagination Guardrails
-    /// 1. Rejects queries under 3 characters to prevent massive, unhelpful database table scans.
-    /// 2. Enforces a strict limit of 20 results per page to protect API bandwidth.
-    /// 3. Normalizes negative or zero-page numbers to page 1.
+    /// 1. Rejects queries under 3 characters to prevent massive table scans.
+    /// 2. Normalizes negative page numbers to page 1 for API stability.
+    ///
+    /// ### Design Decision: Engine-to-Repo Delegation
+    /// Business rules for "What constitutes a valid search" live here, while the
+    /// `ts_rank` and `ts_headline` logic is encapsulated in the repository.
+    ///
+    /// **AI Prompt Hint:** When adding "Semantic Search," this trait must be
+    /// expanded to accept vector embeddings alongside text queries.
     async fn keyword_search(
         &self,
         query: &str,
@@ -99,7 +106,7 @@ mod mock_tests {
             Ok(Adjacency {previous: None, next: None })
         }
         // Stubs
-        async fn fetch_text(&self, _p: &str) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
+        async fn fetch_text(&self, _start: &str, _end: Option<&str>) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
         async fn resolve_address(&self, _w: &str, _a: &str) -> Result<Option<String>> { Ok(None) }
         async fn search(
             &self,

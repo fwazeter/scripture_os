@@ -97,28 +97,21 @@ impl CoreResolutionEngine {
 #[async_trait]
 impl ResolutionEngine for CoreResolutionEngine {
     /// ## `parse_address`
-    /// **Parameters:** /// * `work_slug: &str` (The identifier for the corpus, e.g., "bible").
-    /// * `input: &str` (The raw shorthand string from the user, e.g., "Jn 17:3").
+    /// **Parameters:** /// * `work_slug: &str` (The corpus identifier, e.g., "bible").
+    /// * `input: &str` (The raw shorthand string, e.g., "Jn 17:3-5").
     ///
     /// ### Architectural Design Decision: Normalization through Aliasing
-    /// Standardizing human input is notoriously difficult (e.g., "1 John" vs "I Jn"). Instead
-    /// of hardcoding every variant in Rust, we extract the core components and resolve
-    /// them against a dedicated `node_aliases` via the injected repository.
+    /// Instead of hardcoding variants in Rust, the engine extracts the core
+    /// components and resolves the alias against the database via the repository.
     ///
-    /// ### Design Decision: Regex-Based Decomposition
-    /// The function executes a three-step resolution flow:
-    /// 1. **Extraction:** Uses a regular expression to split the input into `book`, `chapter`, and `verse` groups.
-    /// 2. **Alias Resolution:** Delegates the `book` string to the repository to find the canonical base path.
-    /// 3. **Canonical Assembly:** Recombines the base path with the validated numeric components into a final LTREE string.
+    /// ### Design Decision: Boundary Struct Output
+    /// Returns a `ResolvedAddress` instead of a string. This allows the engine
+    /// to convey sequential ranges (e.g., start and end paths) to the Content Engine
+    /// without messy string manipulation downstream.
     ///
-    /// ### Technical Context: Case-Insensitive Matching
-    /// While the regex ensures the *structure* of the input is correct, the repository
-    /// handles the *semantics* of the alias (e.g., mapping "jn" and "JN" to the same node)
-    /// via case-insensitive database lookups.
-    ///
-    /// **AI Prompt Hint:** If you need to support more complex addressing (like "John 3:16-17"
-    /// or "Gen 1:1, 5"), the Regex here must be updated to handle non-numeric characters
-    /// in the `verse` capture group.
+    /// **AI Prompt Hint:** To support more complex addressing (like "Gen 1:1, 5"),
+    /// the Regex in `extract_alias_and_coords` must be updated to handle
+    /// non-numeric coordinate delimiters.
     async fn parse_address(&self, work_slug: &str, input: &str) -> Result<ResolvedAddress> {
         let (alias, coords) = extract_alias_and_coords(input)?;
 
@@ -173,7 +166,7 @@ mod mock_tests {
         // Stubs
         async fn get_hierarchy(&self, _p: &str) -> Result<Vec<HierarchyNode>> { Ok(vec![]) }
         async fn get_adjacent_nodes(&self, _id: Uuid) -> Result<Adjacency> { Ok(Adjacency { previous: None, next: None }) }
-        async fn fetch_text(&self, _p: &str) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
+        async fn fetch_text(&self, _start: &str, _end: Option<&str>) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
         async fn search(&self, _q: &str, _s: Option<&str>, _l: i64, _o: i64) -> Result<Pagination<SearchMatch>> { unimplemented!() }
     }
 

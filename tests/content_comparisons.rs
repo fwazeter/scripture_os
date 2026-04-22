@@ -13,8 +13,8 @@ async fn test_theological_vs_authorial_overlapping_hierarchies() {
     let engine = CoreContentEngine::new(repo);
 
     // Fetch Rigveda via Mandala system and Ashtaka system
-    let mandala = engine.fetch_text("rigveda.mandala.1.sukta.1.mantra.1").await.unwrap();
-    let ashtaka = engine.fetch_text("rigveda.ashtaka.1.adhyaya.1.varga.1.mantra.1").await.unwrap();
+    let mandala = engine.fetch_text("rigveda.mandala.1.sukta.1.mantra.1", None).await.unwrap();
+    let ashtaka = engine.fetch_text("rigveda.ashtaka.1.adhyaya.1.varga.1.mantra.1", None).await.unwrap();
 
     // Architectural Design Decision: Sequence-to-Address Assembly
     // Different address paths must resolve to the exact same text index.
@@ -38,11 +38,11 @@ async fn test_cross_tradition_psalm_numbering_shifts() {
     let engine = CoreContentEngine::new(repo);
 
     // Bible (Christian) treats title as unnumbered metadata
-    let bible_title = engine.fetch_text("bible.ot.psalms.51.title").await.unwrap();
+    let bible_title = engine.fetch_text("bible.ot.psalms.51.title", None).await.unwrap();
     assert_eq!(bible_title.len(), 6); // 2 indices * 3 translations
 
     // Tanakh (Jewish) counts the first title line as Verse 1
-    let tanakh_v1 = engine.fetch_text("tanakh.ketuvim.psalms.51.1").await.unwrap();
+    let tanakh_v1 = engine.fetch_text("tanakh.ketuvim.psalms.51.1", None).await.unwrap();
     assert_eq!(tanakh_v1[0].absolute_index, 1000);
 }
 
@@ -55,7 +55,7 @@ async fn test_comparison_engine_cross_tradition() {
     let engine = CoreContentEngine::new(repo);
 
     // Using the new get_comparison feature on the Rigveda
-    let comparisons = engine.get_comparison("rigveda.mandala.1.sukta.1.mantra.1").await.unwrap();
+    let comparisons = engine.get_comparison("rigveda.mandala.1.sukta.1.mantra.1", None).await.unwrap();
 
     // Verify it correctly grouped the data
     assert_eq!(comparisons.len(), 1, "Should group into a single node block");

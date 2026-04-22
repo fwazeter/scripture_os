@@ -39,6 +39,10 @@ When a user requests a node (e.g., "John 17:3"), the **Content Engine** performs
 ### **Design Decision: Parallel Alignment**
 Because different editions (translations) use the same `absolute_index` for the same semantic unit, a single query automatically returns every available translation for that node, perfectly aligned for comparison.
 
+### **Design Decision: High-Performance Range Queries**
+Because text is completely decoupled from the tree structure, fetching a massive multi-chapter or multi-book range (e.g., "Genesis 1 through Revelation 22") requires **zero recursive tree queries**.
+The system simply resolves the `start_index` of the first boundary and the `end_index` of the final boundary, and issues a single standard SQL query for texts falling `BETWEEN` those indices. This guarantees $O(1)$ boundary lookup time regardless of range size.
+
 ---
 
 ## 4. Technical Benefits for AI & Developers

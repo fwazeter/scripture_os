@@ -20,7 +20,7 @@ async fn test_full_resolution_to_content_pipeline() {
     assert_eq!(resolved.start_path, "bible.nt.john.17.3");
 
     // 3. Step 2: Fetch Content using the resolved path
-    let texts = content_engine.fetch_text(&resolved.start_path).await.unwrap();
+    let texts = content_engine.fetch_text(&resolved.start_path, resolved.end_path.as_deref()).await.unwrap();
 
     // Verify we got the correct absolute index and translations (KJV & SBLGNT)
     assert!(!texts.is_empty(), "Should retrieve text");

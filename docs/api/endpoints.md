@@ -13,21 +13,26 @@ The API does not talk to the database. It interprets HTTP requests, invokes the 
 ### **A. Resolve Shorthand Address**
 Translates human shorthand (e.g., "Jn 17:3") into a canonical LTREE path.
 
-* **URL:** `GET /api/v1/resolve/:work_slug/:address`
+* **URL:** `GET /api/v1/resolve/{work_slug}/{address}`
 * **Parameters:**
     * `work_slug`: The corpus identifier (e.g., `bible`).
     * `address`: The raw input string (e.g., `Jn 17:3`).
 * **Success Response (JSON):**
     ```json
-    { "data": "bible.nt.john.17.3" }
+    { "data": {
+      "start_path": "bible.nt.john.17.3",
+      "end_path": "bible.nt.john.17.5"
+    } 
+  }
     ```
 
 ### **B. Fetch Content**
 Retrieves aligned text segments for a specific coordinate.
 
-* **URL:** `GET /api/v1/content/*path`
+* **URL:** `GET /api/v1/content/{*path}`
 * **Parameters:**
     * `path`: The canonical LTREE address (e.g., `bible.nt.john.17.3`).
+    * `end_path` *(Optional Query Param)*: The canonical LTREE address to end retrieval (e.g. `?end_path=bible.nt.john.17.5`).
 * **Success Response (JSON):**
     ```json
     {
@@ -45,12 +50,35 @@ Retrieves aligned text segments for a specific coordinate.
     }
     ```
 
-### **C. Explore Hierarchy**
+### **C. Compare Content**
+Groups multiple translations under their shared structural coordinate for side-by-side parallel reading.
+
+* **URL:** `GET /api/v1/compare/{*path}?end_path=...`
+* **Parameters:**
+  * `path`: The canonical LTREE address to begin comparison.
+  * `end_path` *(Optional Query Param)*: The canonical LTREE address to end comparison.
+* **Success Response (JSON):**
+    ```json
+    {
+      "data": [
+        {
+          "node_id": "uuid",
+          "path": "canonical.path",
+          "contents": [
+            { "edition_name": "Translation_A", "body_text": "..." },
+            { "edition_name": "Translation_B", "body_text": "..." }
+          ]
+        }
+      ]
+    }
+    ```
+
+### **D. Explore Hierarchy**
 Provides structural discovery for building menus or navigation trees.
 
-* **URL:** `GET /api/v1/hierarchy/*path`
+* **URL:** `GET /api/v1/hierarchy/{*path}`
 * **Parameters:**
-    * `path`: The parent node path (e.g., `bible.nt.john`).
+  * `path`: The parent node path (e.g., `bible.nt.john`).
 * **Success Response (JSON):**
     ```json
     {

@@ -1,12 +1,9 @@
 //! # Traversal Engine (The "Guide")
 //!
 //! The Traversal Engine handles structural navigation within a scriptural work.
-//! It acts as the orchestration layer between the API handlers and the data repository,
-//! ensuring that users can discover the hierarchy (Chapters in a Book) or move
-//! linearly (Next/Previous Chapter).
 //!
 //! ### Architectural Design Decision: Structural Discovery
-//! Scripture OS separates "Addressing" from "Content". The Traversal engine is
+//! Scripture OS separates "Addressing" from "Content". This engine is
 //! concerned exclusively with "Addressing"—finding where a user is and where
 //! they can go next.
 
@@ -24,9 +21,8 @@ use super::TraversalEngine;
 /// This is the primary implementation of the `TraversalEngine` trait.
 ///
 /// ### Architectural Design Decision: Dependency Injection (DI)
-/// This struct holds a thread-safe, reference-counted pointer (`Arc`) to the underlying
-/// data repository. This allows the engine to manage its own state and be easily
-/// shared across concurrent asynchronous tasks in the Axum web framework.
+/// Encapsulates a thread-safe repository pointer to manage state across
+/// concurrent Axum web requests.
 pub struct CoreTraversalEngine {
     repo: Arc<dyn ScriptureRepository + Send + Sync>,
 }
@@ -44,23 +40,17 @@ impl TraversalEngine for CoreTraversalEngine {
     /// **Parameters:** /// * `parent_path: &str` (The canonical LTREE path, e.g., "bible.nt.john").
     ///
     /// ### Architectural Design Decision: Progressive Disclosure
-    /// This function enables the UI to load scripture in "chunks" (e.g., a list of
-    /// chapters) rather than downloading the entire hierarchy at once. This
-    /// significantly reduces frontend memory overhead.
+    /// This function enables the UI to load scripture in "chunks" (e.g., chapters)
+    /// rather than the entire hierarchy, reducing frontend memory overhead.
     ///
     /// ### Design Decision: Engine-to-Repo Delegation
-    /// The engine validates the path format (todo) and then delegates the specific
-    /// `nlevel` filtering logic to the repository. This keeps the engine
-    /// implementation simple and focused on business rules.
+    /// The engine validates the path format and delegates `nlevel` filtering
+    /// to the repository, keeping the engine implementation focused on
+    /// business rules rather than SQL implementation.
     ///
-    /// ### Technical Context: Trait-Based Dispatch
-    /// By taking `&dyn ScriptureRepository`, this function remains agnostic of
-    /// whether it is talking to PostgreSQL, a local SQLite cache, or a Mock
-    /// object in a unit test.
-    ///
-    /// **AI Prompt Hint:** If adding path-based permissions or "feature flags"
-    /// (e.g., hiding certain apocryphal books), implement that filtering logic
-    /// here after receiving the nodes from the repository.
+    /// **AI Prompt Hint:** If adding path-based permissions (e.g., hiding
+    /// apocryphal works), implement the filtering logic here after the
+    /// repository returns the node list but before returning to the Gateway.
     async fn get_hierarchy(
         &self,
         parent_path: &str
@@ -71,28 +61,16 @@ impl TraversalEngine for CoreTraversalEngine {
     }
 
     /// ## `get_adjacent_nodes`
-    /// **Parameters:** /// * `current_node: Uuid` (The unique ID of the node currently in view).
+    /// **Parameters:** /// * `current_node: Uuid` (The unique ID of the node in view).
     ///
     /// ### Architectural Design Decision: Contextual Continuity
-    /// Scripture navigation requires maintaining the "type context". If a user is
-    /// reading a Chapter, the "Next" button should take them to the next Chapter,
-    /// not the first verse of the current chapter. This function ensures
-    /// **Type-Strict Navigation**.
+    /// Navigation requires maintaining "type context". If reading a Chapter,
+    /// the "Next" button must lead to the next Chapter, not a Verse node. This
+    /// function enforces **Type-Strict Navigation**.
     ///
-    /// ### Design Decision: Identity-Based Adjacency
-    /// We use the `Uuid` rather than the `path` string for lookup because IDs
-    /// are immutable, whereas paths might change if a hierarchy is restructured.
-    /// The repository uses this ID to anchor the "Previous" and "Next" search.
-    ///
-    /// ### Technical Context: Option Handling
-    /// The return type `Adjacency` contains two `Option<HierarchyNode>` fields.
-    /// This naturally handles the "Start of Book" and "End of Book" edge cases
-    /// where one or both neighbors might not exist.
-    ///
-    /// **AI Prompt Hint:** If you are building a "Reading Plan" feature, you
-    /// may need to create a new version of this function that ignores `node_type`
-    /// to allow jumping across different types of nodes (e.g., from the end
-    /// of a Testament to the start of a Gospel).
+    /// **AI Prompt Hint:** If building a "Global Linear Reading" feature, create
+    /// a new repository method that ignores `node_type` to allow jumping
+    /// from the end of one book to the start of the next.
     async fn get_adjacent_nodes(
         &self,
         current_node: Uuid
@@ -171,7 +149,7 @@ mod mock_tests {
         async fn get_adjacent_nodes(&self, _id: Uuid) -> Result<Adjacency> {
             Ok(Adjacency { previous: None, next: None })
         }
-        async fn fetch_text(&self, _path: &str) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
+        async fn fetch_text(&self, _start: &str, _end: Option<&str>) -> Result<Vec<ScriptureContent>> { Ok(vec![]) }
         async fn resolve_address(&self, _w: &str, _a: &str) -> Result<Option<String>> { Ok(None) }
 
         async fn search(
