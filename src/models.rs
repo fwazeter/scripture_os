@@ -61,6 +61,15 @@ pub struct Adjacency {
     pub next: Option<HierarchyNode>,
 }
 
+/// ## Resolved Address (Boundary Struct)
+/// Represents a canonical traversal instruction.
+/// If `end_path` is Some, the instruction represents a sequential range spanning multiple nodes.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ResolvedAddress {
+    pub start_path: String,
+    pub end_path: Option<String>,
+}
+
 // --- 3. Discovery Models ---
 
 /// ## Search Match

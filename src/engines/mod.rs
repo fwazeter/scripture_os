@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::models::{
     HierarchyNode,
     Adjacency,
+    ResolvedAddress,
     ScriptureContent,
     Comparison,
     SearchMatch,
@@ -22,11 +23,11 @@ pub mod search;
 /// Text assembly engine trait
 #[async_trait]
 pub trait ContentEngine: Send + Sync {
-    /// Retrieves text segments for a given canonical ltree path.
-    async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>>;
+    /// Retrieves text segments for a given canonical ltree path or range.
+    async fn fetch_text(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<ScriptureContent>>;
 
     /// Groups translations by their shared canonical node for side-by-side viewing.
-    async fn get_comparison(&self, path: &str) -> Result<Vec<Comparison>>;
+    async fn get_comparison(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<Comparison>>;
 
     // Future methods to implement:
     // async get_verse_bundle(&self, path: &str) -> Result<...>;
@@ -37,7 +38,7 @@ pub trait ContentEngine: Send + Sync {
 #[async_trait]
 pub trait ResolutionEngine: Send + Sync {
     /// Parses a human-readable shorthand (e.g., "Jn 17:3) into an LTREE path.
-    async fn parse_address(&self, work_slug: &str, input: &str) -> Result<String>;
+    async fn parse_address(&self, work_slug: &str, input: &str) -> Result<ResolvedAddress>;
 
     // Future methods to implement:
     // async fn validate_path(&self, path: &str) -> Result<bool>;

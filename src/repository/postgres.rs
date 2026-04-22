@@ -156,7 +156,8 @@ impl ScriptureRepository for PostgresRepository {
     }
 
     /// ## `fetch_text`
-    /// **Parameters:** `path: &str` (The canonical address, e.g., "bible.nt.jn.3.16").
+    /// **Parameters:** `path: &str` (The canonical address, e.g., "bible.nt.jn.17.3").
+    /// * `end_path`: Option<&str>` (An optional canonical address to end retrieval).
     ///
     /// ### Architectural Design Decision: Sequence-to-Address Mapping
     /// This function implements the core bridge between the hierarchical "Spine" and the linguistic "Content".
@@ -170,14 +171,24 @@ impl ScriptureRepository for PostgresRepository {
     /// Because the `texts` table does not inherently know its hierarchical path (Stand-off markup),
     /// we dynamically inject `$1` (node_id) and `$2` (path) directly into the SELECT projection.
     /// We also inject `NULL::jsonb` to fulfill the `translation_metadata` Option field.
-    async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
-        // 1. Fetch the range bounds, ID, and work_id for the requested path
-        let target_node = sqlx::query!(
+    async fn fetch_text(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<ScriptureContent>> {
+        // 1. Fetch starting boundary and work context.
+        let start_node = sqlx::query!(
             r#"
             SELECT id, work_id, start_index, end_index FROM nodes WHERE path = $1::text::ltree
             "#,
-            path
+            start_path
         ).fetch_one(&self.pool).await?;
+
+        // 2. Resolve ending boundary
+        let final_end_index = if let Some(ep) = end_path {
+            sqlx::query_scalar!(
+                "SELECT end_index FROM nodes WHERE path = $1::text::ltree AND work_id = $2",
+                ep, start_node.work_id
+            ).fetch_one(&self.pool).await?
+        } else {
+            start_node.end_index
+        };
 
         // 2. Fetch texts within those bounds, and inject the node context into the response
         let contents = sqlx::query_as::<_, ScriptureContent>(
@@ -197,11 +208,11 @@ impl ScriptureRepository for PostgresRepository {
                 ORDER BY t.absolute_index ASC, e.is_source DESC
                 "#
         )
-            .bind(target_node.id)
-            .bind(path)
-            .bind(target_node.start_index)
-            .bind(target_node.end_index)
-            .bind(target_node.work_id)
+            .bind(start_node.id)
+            .bind(start_path)
+            .bind(start_node.start_index)
+            .bind(final_end_index)
+            .bind(start_node.work_id)
             .fetch_all(&self.pool)
             .await?;
 

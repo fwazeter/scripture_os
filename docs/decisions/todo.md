@@ -7,7 +7,7 @@ This document tracks the immediate technical tasks required to fulfill the Scrip
 - [X] **Implement Comparison Engine Logic**
     - [X] Add `get_comparison(path: &str)` to the `ContentEngine` trait.
     - [X] Implement logic to group `ScriptureContent` by `node_id` into the `Comparison` model.
-    - [x] Create Axum route: `GET /api/v1/compare/*path`.
+    - [x] Create Axum route: `GET /api/v1/compare/{*path}`.
     - [x] Dual-Track Testing Compliance.
       - [x] Added `mod mock_tests` for the Content Engine to verify grouping logic in isolation.
       - [x]Updated `mod tests` with integration tests for `get_comparison`.

@@ -16,11 +16,11 @@ async fn test_full_resolution_to_content_pipeline() {
     let content_engine = CoreContentEngine::new(repo.clone());
 
     // 2. Step 1: Resolve Shorthand Address (User enters: "Jn 17:3")
-    let path = resolution_engine.parse_address("bible", "Jn 17:3").await.unwrap();
-    assert_eq!(path, "bible.nt.john.17.3");
+    let resolved = resolution_engine.parse_address("bible", "Jn 17:3").await.unwrap();
+    assert_eq!(resolved.start_path, "bible.nt.john.17.3");
 
     // 3. Step 2: Fetch Content using the resolved path
-    let texts = content_engine.fetch_text(&path).await.unwrap();
+    let texts = content_engine.fetch_text(&resolved.start_path).await.unwrap();
 
     // Verify we got the correct absolute index and translations (KJV & SBLGNT)
     assert!(!texts.is_empty(), "Should retrieve text");

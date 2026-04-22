@@ -71,7 +71,8 @@ pub trait ScriptureRepository: Send + Sync {
     async fn get_adjacent_nodes(&self, current_node_id:Uuid) -> Result<Adjacency>;
 
     /// ## `fetch_text`
-    /// **Parameters:** `path: &str` (The canonical address to retrieve, e.g., "bible.nt.john.1").
+    /// **Parameters:** `start_path: &str` (The canonical address to begin retrieval, e.g., "bible.nt.john.1").
+    /// * `end_path`: Option<&str>` (An optional canonical address to end retrieval).
     ///
     /// ### Architectural Design Decision: Content Assembly
     /// This function bridges the Structural Spine and the actual text.
@@ -88,7 +89,7 @@ pub trait ScriptureRepository: Send + Sync {
     ///
     /// **AI Prompt Hint:** Ensure that the result vector is ordered by `is_source DESC`
     /// so that original languages (Greek/Hebrew) appear first in the array.
-    async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>>;
+    async fn fetch_text(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<ScriptureContent>>;
 
     /// ## `resolve_address`
     /// **Parameters:** /// * `work_slug: &str` (The scope of the work, e.g., "bible").

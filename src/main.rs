@@ -101,7 +101,7 @@ async fn resolve_address(
     Path((work_slug, address)): Path<(String, String)>,
 ) -> Json<serde_json::Value> {
     match state.resolution.parse_address(&work_slug, &address).await {
-        Ok(canonical_path) => Json(serde_json::json!({ "data": canonical_path })),
+        Ok(resolved) => Json(serde_json::json!({ "data": resolved })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
 }

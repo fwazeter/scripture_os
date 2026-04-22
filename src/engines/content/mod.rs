@@ -64,9 +64,9 @@ impl ContentEngine for CoreContentEngine {
     /// "Side-by-Side" views, ensure results are ordered by `absolute_index ASC` to
     /// maintain reading flow, then by `is_source DESC` to prioritize original
     /// language manuscripts.
-    async fn fetch_text(&self, path: &str) -> Result<Vec<ScriptureContent>> {
+    async fn fetch_text(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<ScriptureContent>> {
         // Delegates the specific range-finding and text-fetching logic to the repository.
-        self.repo.fetch_text(path).await
+        self.repo.fetch_text(start_path, end_path).await
     }
 
     /// ## `get_comparison`
@@ -74,8 +74,8 @@ impl ContentEngine for CoreContentEngine {
     /// Leverages the respoistory's `absolute_index` sorting to sequentially group
     /// flat `ScriptureContent` rows into structured `Comparison` blocks. This
     /// guarantees that translations of the exact same semantic unit stay locked together.
-    async fn get_comparison(&self, path: &str) -> Result<Vec<Comparison>> {
-        let contents = self.repo.fetch_text(path).await?;
+    async fn get_comparison(&self, start_path: &str, end_path: Option<&str>) -> Result<Vec<Comparison>> {
+        let contents = self.repo.fetch_text(start_path, end_path).await?;
 
         if contents.is_empty() {
             return Ok(vec![]);
