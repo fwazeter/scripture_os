@@ -15,15 +15,21 @@ This final implementation plan for **Scripture OS** synthesizes the architectura
 *Goal: Establish the immutable coordinate system and the repository pattern.*
 
 ### 1. FSI v4.0 Schema & Newtypes
-* [ ] **Coordinate Struct:** Implement the 5-part `Coordinate` struct in `src/models.rs` using `#[repr(C)]` for hardware-native packing.
-* [ ] **Newtype Enforcement:** Wrap IDs in `WorkID(i32)`, `MacroID(i32)`, and `NamespaceID(i16)` to prevent type-mixing at compile time.
-* [ ] **LexKey Utility:** Build a DRY utility for Base-62 lexicographical string generation to allow infinite word-level insertion.
+* [x] **Coordinate Struct:** Implement the 5-part `Coordinate` struct in `src/models.rs` using `#[repr(C)]` for hardware-native packing.
+* [x] **Newtype Enforcement:** Wrap IDs in `WorkID(i32)`, `MacroID(i32)`, and `NamespaceID(i16)` to prevent type-mixing at compile time.
+* [x] **LexKey Utility:** Build a DRY utility for Base-62 lexicographical string generation to allow infinite word-level insertion.
 
 ### 2. The Repository Abstraction
-* [ ] **Trait Definition:** Implement the `ScriptureRepository` trait in `src/repositories/mod.rs` to abstract all SQL logic.
+* [x] **Trait Definition:** Implement the `ScriptureRepository` trait in `src/repositories/mod.rs` to abstract all SQL logic.
+* [x] **Track B (Mocks):** Implemented `MockFsiRepository` with O(1) bulk insertion for instant, isolated pipeline testing.
+* [ ] **Track A (Postgres):** Create `PostgresFsiRepository` using `sqlx` to bind the FSI trait to the Postgres database. *(Next Immediate Step)*
+* [x] **DRY Ingestor Pipeline:** *(Extra)* Abstracted sequence math and DB batching into a reusable `Ingestor` struct so we don't repeat logic across file types.
+* [x] **Uthmani Atomizer (Track 0x02):** Built `ingest_uthmani_quran` to parse `.txt` and assign Arabic Logical Anchors to word-atoms.
+* [x] **Khalifa Alignment (Track 19):** *(Extra)* Built `ingest_khalifa_csv` to parse `verse_nodes.csv` and map English translations to the exact same FSI `MacroID` spaces.
 * [ ] **Postgres Implementation:** Create `PostgresRepository` using `sqlx`. Ensure all queries use `ltree` for hierarchical pathing.
 * [ ] **DRY Query Builders:** Create re-usable SQL fragment builders for common operations like "fetch by coordinate range" to avoid duplicating complex JOIN logic.
-
+* [x] **Documentation Audit:** Ensured every public function contains the `Architectural Design Decision` and `AI Prompt Hint` headers as mandated by standards.
+* [x] **Dual-Track Verification:** Created `tests/fsi_pipeline_test.rs` to prove the mock and engine pipelines work perfectly.
 ---
 
 ## 🟨 Phase 2: The "Muscle" (Engines & WASM Host)
@@ -32,6 +38,8 @@ This final implementation plan for **Scripture OS** synthesizes the architectura
 ### 3. Service Layer (Engines)
 * [ ] **Contract-First Traits:** Define `ResolutionEngine`, `ContentEngine`, and `TraversalEngine` traits before implementation.
 * [ ] **Dependency Injection:** Refactor engines to accept `Arc<dyn ScriptureRepository + Send + Sync>` via their `new()` constructors.
+* [x] **Content Engine:** Defined `FsiContentEngine` trait and implemented `CoreContentEngine` with safe RTL unicode handling (using `trim_end()`).
+* [x] **Dependency Injection:** Refactored engine to accept `Arc<dyn FsiRepository + Send + Sync>` via `new()` constructor.
 * [ ] **Resolution Engine:** Implement the "Router" logic to map human shorthands to FSI v4.0 coordinates.
 
 ### 4. WASM Plugin Host (The Lenses)

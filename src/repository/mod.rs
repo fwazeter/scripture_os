@@ -8,7 +8,12 @@
 //! from physical storage details. This ensures that the Service Layer
 //! remains pure, testable, and agnostic of specific database syntax.
 
+// Legacy USDB V1 exports
 pub mod postgres;
+// -- NEW FSI v4.0 Exports ---
+pub mod fsi_repo;
+pub mod fsi_mock;
+
 pub use self::postgres::PostgresRepository;
 
 use anyhow::Result;

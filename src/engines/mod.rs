@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
-
+use crate::fsi::models::{MacroID, NamespaceID, WorkID};
 use crate::models::{
     HierarchyNode,
     Adjacency,
@@ -12,15 +12,35 @@ use crate::models::{
     Pagination
 };
 
-// Export the submodules
+// Export the submodules (legacy)
 pub mod content;
 pub mod resolution;
 pub mod traversal;
 pub mod search;
 
+// -- New FSI v4.0 Modules --
+pub mod fsi_content; // temp. name to avoid colliding with legacy content.
+
 // -- Service Layer Contracts ---
 
-/// Text assembly engine trait
+/// # The Content Engine Contract
+///
+/// ### Architectural Design Decision: Decoupling Assembly from Storage
+/// This trait defines how the system requests assembled text. The Engine knows nothing
+/// about SQL or physical tables; it only knows how to ask the Repository for FSI
+/// sequences and stitch them together into a final product.
+#[async_trait]
+pub trait FsiContentEngine: Send + Sync {
+    async fn assemble_macro(
+        &self,
+        work: WorkID,
+        macro_level: MacroID,
+        namespace: NamespaceID,
+    ) -> Result<String>;
+}
+
+
+/// Text assembly engine trait - legacy
 #[async_trait]
 pub trait ContentEngine: Send + Sync {
     /// Retrieves text segments for a given canonical ltree path or range.

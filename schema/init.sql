@@ -57,3 +57,38 @@ CREATE TABLE texts (
 CREATE INDEX idx_nodes_path ON nodes USING GIST (path);
 CREATE INDEX idx_nodes_work_indices ON nodes (work_id, start_index, end_index);
 CREATE INDEX idx_texts_edition_index ON texts (edition_id, absolute_index);
+
+-- ===============================================
+-- FSI V4.0 MIGRATION TABLES (Side-by-Side)
+-- ===============================================
+
+-- Phase 1: Universal Work Registry
+CREATE TABLE IF NOT EXISTS works_registry (
+    work_id INT PRIMARY KEY,
+    title TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL
+);
+
+-- Insert the MVP target (Quran)
+INSERT INTO works_registry (work_id, title, slug)
+VALUES (786, 'The Holy Quran', 'quran')
+ON CONFLICT DO NOTHING;
+
+-- Phase 1: The Master "Big Scroll" Table
+CREATE TABLE IF NOT EXISTS fsi_texts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), --- Surrogate PK
+
+    work_id INT REFERENCES works_registry(work_id),
+    macro_id INT NOT NULL,
+    lex_key VARCHAR(50) NOT NULL,
+    namespace_id SMALLINT NOT NULL,
+    sub_mask SMALLINT NOT NULL,
+
+    text_content TEXT NOT NULL,
+    pq_hash BIGINT,
+
+    --- FSI Coordinate is strictly enforced as a Unique index to prevent collisions
+    CONSTRAINT unique_fsi_coordinate UNIQUE (work_id, macro_id, lex_key, namespace_id, sub_mask)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fsi_sequence ON fsi_texts (work_id, macro_id, lex_key ASC);

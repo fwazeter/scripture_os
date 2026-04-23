@@ -35,6 +35,34 @@ scripture_os/
 │   └── models.rs               <-- Central Data Contracts
 ├── tests/                      <-- Cross-module Integration Tests
 └── README.md                   <-- Primary entry point
+
+src/
+├── main.rs                 <-- Application entry point
+├── lib.rs                  <-- Module declarations (pub mod fsi; pub mod repository; etc.)
+│
+├── fsi/                    <-- DOMAIN: The "Stable Bottom" (FSI v4.0)
+│   ├── mod.rs              <-- Exports FSI components
+│   ├── models.rs           <-- The 5-part Coordinate, WorkID, SubMask, etc.
+│   └── lex_key.rs          <-- Base-62 string generation & comparison utility
+│
+├── repository/             <-- DOMAIN: The Data Access Layer (DAL)
+│   ├── mod.rs              <-- Defines the `ScriptureRepository` trait contract
+│   ├── postgres.rs         <-- Concrete FSI implementation using sqlx
+│   └── mock.rs             <-- In-memory mock for Track B testing
+│
+├── engines/                <-- DOMAIN: The "Muscle" (Service Layer)
+│   ├── mod.rs              
+│   ├── content.rs          <-- Assembles FSI fragments into readable text
+│   ├── resolution.rs       <-- Translates human shorthands to FSI coordinates
+│   └── traversal.rs        <-- Navigates the FSI trees (next/prev/children)
+│
+├── lenses/                 <-- DOMAIN: The "Liquid Top" (WASM Plugins)
+│   ├── mod.rs              <-- Defines the `Lens` trait contract
+│   └── wasm_host.rs        <-- Wasmtime integration for external logic
+│
+└── utils/                  <-- DOMAIN: Shared/Generic helpers
+    ├── mod.rs
+    └── errors.rs           <-- Domain-specific `ScriptureError` enum
 ```
 
 
