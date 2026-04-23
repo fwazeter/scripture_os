@@ -1,10 +1,13 @@
-// --- Legacy USDB V! Modules (Do not delete yet) ---
-pub mod models;
-pub mod repository;
-pub mod test_utils;
-pub mod engines;
+//! # Scripture OS Core
+//!
+//! ### Architectural Design Decision: Domain-Driven Layering
+//! This project is organized into vertical layers:
+//! 1. **FSI**: The immutable "DNA" and coordinate system.
+//! 2. **Repository**: The abstract data access layer (DAL).
+//! 3. **Engines**: The service layer where business logic resides.
+//! 4. **Utils**: Shared primitives like error handling.
 
-// --- New FSI v4.0 Modules ---
+pub mod engines;
 pub mod fsi;
-pub mod lenses;
+pub mod repository;
 pub mod utils;

@@ -1,0 +1,18 @@
+scripture_os/
+├── src/
+│   ├── main.rs                 <-- Application entry point
+│   ├── lib.rs                  <-- Central module manifest
+│   ├── fsi/                    <-- DOMAIN: The "DNA"
+│   │   ├── mod.rs              <-- Public interface for FSI
+│   │   ├── models.rs           <-- NewTypes (WorkID, LexKey, etc.)
+│   │   └── lex_key.rs          <-- Comparison logic
+│   ├── repository/             <-- DOMAIN: The "Data Access Layer" (DAL)
+│   │   ├── mod.rs              <-- The Trait Contract (The "Contract-First" Rule)
+│   │   ├── postgres.rs         <-- Concrete SQLx Implementation
+│   │   └── mock.rs             <-- Mock implementation for Track B tests
+│   ├── engines/                <-- DOMAIN: The "Service Layer"
+│   │   ├── mod.rs              <-- Exports Engines
+│   │   └── content.rs          <-- The Assembler (uses ScriptureRepository)
+│   └── utils/
+│       ├── mod.rs
+│       └── errors.rs           <-- ScriptureError Enum

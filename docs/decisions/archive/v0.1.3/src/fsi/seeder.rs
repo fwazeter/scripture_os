@@ -29,6 +29,23 @@ pub struct Ingestor<'a, R: FsiRepository> {
     batch: Vec<ScriptureAtom>,
 }
 
+// ==========================================
+// IMPLEMENTATION 1: Standard Translation (CSV)
+// ==========================================
+
+#[derive(serde::Deserialize)]
+struct StandardTranslationCsv {
+    // Looks for a column named 'chapter' first. If missing, tries the 'surah' alias.
+    #[serde(alias = "surah")]
+    chapter: i32,
+
+    // Looks for 'verse_num'. If missing, tries 'verse' or 'verseNum'.
+    #[serde(alias = "verseNum", alias = "verse")]
+    verse_num: i32,
+
+    text: String,
+}
+
 impl<'a, R: FsiRepository> Ingestor<'a, R> {
     /// ## `new`
     /// **Parameters:** /// - `repo`: `&'a R` (A reference to the FSI repository implementation).
@@ -41,11 +58,24 @@ impl<'a, R: FsiRepository> Ingestor<'a, R> {
     /// a batch vector to minimize heap reallocations during massive file parsing.
     pub fn new(repo: &'a R, work: WorkID, namespace: NamespaceID, base_mask: SubMask) -> Self {
         Self {
-            repo, work, namespace, base_mask,
+            repo,
+            work,
+            namespace,
+            base_mask,
             current_macro: 0,
             word_counter: 0,
-            batch: Vec::with_capacity(5000),
+            batch: Vec::with_capacity(2000),
         }
+    }
+
+    /// Internal helper to guarantee the batch never exceeds the safe threshold,
+    /// regardless of how massive a single input string is.
+    async fn check_flush(&mut self) -> Result<()> {
+        if self.batch.len() >= 2000 {
+            self.repo.insert_atoms(self.batch.clone()).await?;
+            self.batch.clear();
+        }
+        Ok(())
     }
 
     /// ## `process_segment`
@@ -65,7 +95,12 @@ impl<'a, R: FsiRepository> Ingestor<'a, R> {
     /// **AI Prompt Hint:** The default tokenizer splits purely by whitespace. If a future
     /// language requires morphological splitting (like Thai or complex Arabic Tajweed),
     /// implement a custom tokenizer trait and inject it here.
-    pub async fn process_segment(&mut self, macro_id: i32, structural_marker: &str, text: &str) -> Result<()> {
+    pub async fn process_segment(
+        &mut self,
+        macro_id: i32,
+        structural_marker: &str,
+        text: &str,
+    ) -> Result<()> {
         if macro_id != self.current_macro {
             self.current_macro = macro_id;
             self.word_counter = 0;
@@ -101,12 +136,9 @@ impl<'a, R: FsiRepository> Ingestor<'a, R> {
                 text_content: word.to_string(),
             });
             self.word_counter += 1;
-        }
 
-        // 3. Batch flush
-        if self.batch.len() >= 5000 {
-            self.repo.insert_atoms(self.batch.clone()).await?;
-            self.batch.clear();
+            // Flush inside the loop in case a parsing error feeds excessive words.
+            self.check_flush().await?;
         }
 
         Ok(())
@@ -127,51 +159,41 @@ impl<'a, R: FsiRepository> Ingestor<'a, R> {
     }
 }
 
-// ==========================================
-// IMPLEMENTATION 1: Khalifa Translation (CSV)
-// ==========================================
-
-#[derive(serde::Deserialize)]
-struct CsvVerse {
-    #[serde(rename = "verseId")]
-    _verse_id: String,
-    surah: i32,
-    #[serde(rename = "verseNum")]
-    verse_num: i32,
-    #[serde(rename = "surahName")]
-    _surah_name: String,
-    text: String,
-}
-
 /// ## `ingest_khalifa_csv`
 /// **Parameters:** /// - `repo`: `&R` (The injected FSI repository).
 /// - `file_path`: `impl AsRef<Path>` (The path to the CSV file).
+/// - `work_id`: `WorkID`
+/// - `namespace_id`: `NamespaceID`
+/// - `base_mask`: `SubMask`
 ///
-/// ### Architectural Design Decision: Translation Track Mapping
-/// Ingests the Rashad Khalifa English translation into Namespace 19.
-/// It utilizes the DRY `Ingestor` pipeline to ensure that the English words are mathematically
-/// aligned within the FSI coordinate space, enabling future cross-reference logic.
+/// ### Architectural Design Decision: Format-Based Ingestion
+/// Decouples the file parsing logic from specific scriptures. This function can now
+/// ingest ANY translation that follows the standard 5-column CSV layout, routing it
+/// to the dynamically injected FSI coordinates.
 ///
 /// **AI Prompt Hint:** English is LTR (Left-To-Right), so the `SubMask` strictly uses `0x0000`
 /// without the RTL bit.
-pub async fn ingest_khalifa_csv<R: FsiRepository>(repo: &R, file_path: impl AsRef<Path>) -> Result<()> {
-    let mut ingestor = Ingestor::new(
-        repo,
-        WorkID(786),
-        NamespaceID(19),
-        SubMask(0x0000), // Standard text (No RTL, No Anchor)
-    );
+pub async fn ingest_csv_format<R: FsiRepository>(
+    repo: &R,
+    file_path: impl AsRef<Path>,
+    work_id: WorkID,
+    namespace_id: NamespaceID,
+    base_mask: SubMask,
+) -> Result<()> {
+    let mut ingestor = Ingestor::new(repo, work_id, namespace_id, base_mask);
 
     let mut reader = csv::Reader::from_path(file_path)?;
 
     for result in reader.deserialize() {
-        let record: CsvVerse = result?;
+        let record: StandardTranslationCsv = result?;
 
-        ingestor.process_segment(
-            record.surah,
-            &format!("AYAH:{}", record.verse_num),
-            &record.text
-        ).await?;
+        ingestor
+            .process_segment(
+                record.chapter,
+                &format!("VERSE:{}", record.verse_num),
+                &record.text,
+            )
+            .await?;
     }
 
     ingestor.finish().await?;
@@ -179,37 +201,36 @@ pub async fn ingest_khalifa_csv<R: FsiRepository>(repo: &R, file_path: impl AsRe
 }
 
 // ==========================================
-// IMPLEMENTATION 2: Uthmani Root (TXT)
+// IMPLEMENTATION 2: Tanzil Root (TXT)
 // ==========================================
 
-/// ## `ingest_uthmani_quran`
-/// **Parameters:** /// - `repo`: `&R` (The injected FSI repository).
+/// ## `ingest_tanzil_format`
+/// /// **Parameters:** /// - `repo`: `&R` (The injected FSI repository).
 /// - `file_path`: `impl AsRef<Path>` (The path to the TXT file).
-///
-/// ### Architectural Design Decision: The Logical Anchor "Skeleton"
-/// This seeder establishes the `0x02` (Arabic Root) namespace for Work 786 (Quran).
-/// It generates the immutable "Logical Anchors" which translations will eventually map to.
-///
-/// ### Technical Context: SubMask Bitwise Logic
-/// Original Arabic text mandates the `SubMask::LOGICAL_ANCHOR` and `SubMask::RTL` bits to ensure
-/// accurate metadata indexing and bidirectional rendering.
-///
+/// - `work_id`: `WorkID`
+/// - `namespace_id`: `NamespaceID`
+/// - `base_mask`: `SubMask`
+/// ### Architectural Design Decision: Format-Based Ingestion
+/// Parses any raw scripture text that utilizes the standard Tanzil pipe-delimited format
+/// (`Surah|Ayah|Text`). It no longer hardcodes the Arabic root, making it reusable for
+/// other original-language texts formatted by the Tanzil project.
 /// **AI Prompt Hint:** The Tanzil format pipes (`|`) are hardcoded here. If the source
 /// format changes, update the split logic accordingly.
-pub async fn ingest_uthmani_quran<R: FsiRepository>(repo: &R, file_path: impl AsRef<Path>) -> Result<()> {
-    let mut ingestor = Ingestor::new(
-        repo,
-        WorkID(786),
-        NamespaceID(0x02), // Arabic Root
-        SubMask(SubMask::LOGICAL_ANCHOR | SubMask::RTL),
-    );
+pub async fn ingest_tanzil_format<R: FsiRepository>(
+    repo: &R,
+    file_path: impl AsRef<Path>,
+    work_id: WorkID,
+    namespace_id: NamespaceID,
+    base_mask: SubMask,
+) -> Result<()> {
+    let mut ingestor = Ingestor::new(repo, work_id, namespace_id, base_mask);
 
     let file = File::open(file_path)?;
     let reader = io::BufReader::new(file);
 
     for line in reader.lines() {
         let line = line?;
-        if line.starts_with('#') || line.trim().is_empty() {
+        if line.starts_with('#') || line.is_empty() {
             continue;
         }
 
@@ -219,7 +240,7 @@ pub async fn ingest_uthmani_quran<R: FsiRepository>(repo: &R, file_path: impl As
         }
 
         let surah: i32 = parts[0].parse().unwrap_or(0);
-        let ayah_str = format!("AYAH:{}", parts[1]);
+        let ayah_str = format!("VERSE:{}", parts[1]);
         let text = parts[2].trim();
 
         ingestor.process_segment(surah, &ayah_str, text).await?;
