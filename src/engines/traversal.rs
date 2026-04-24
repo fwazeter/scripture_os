@@ -5,19 +5,18 @@
 //! entirely decoupled from the actual content assembly.
 
 use crate::fsi::models::{Coordinate, ScriptureAtom};
-use crate::repository::ScriptureRepository;
+use crate::repository::SharedScriptureRepository;
 use crate::utils::errors::ScriptureError;
-use std::sync::Arc;
 
 /// ## `CoreTraversalEngine`
 ///
 /// ### Architectural Design Decision: Dependency Injection (DI)
 pub struct CoreTraversalEngine {
-    repo: Arc<dyn ScriptureRepository + Send + Sync>,
+    repo: SharedScriptureRepository,
 }
 
 impl CoreTraversalEngine {
-    pub fn new(repo: Arc<dyn ScriptureRepository + Send + Sync>) -> Self {
+    pub fn new(repo: SharedScriptureRepository) -> Self {
         Self { repo }
     }
 

@@ -1161,6 +1161,7 @@ dependencies = [
  "async-trait",
  "axum",
  "blake3",
+ "dotenvy",
  "serde",
  "sqlx",
  "thiserror",

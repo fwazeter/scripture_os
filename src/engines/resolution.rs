@@ -5,20 +5,19 @@
 //! the strict mathematical boundaries of the FSI domain.
 
 use crate::fsi::models::Coordinate;
-use crate::repository::ScriptureRepository;
+use crate::repository::SharedScriptureRepository;
 use crate::utils::errors::ScriptureError;
-use std::sync::Arc;
 
 /// ## `CoreResolutionEngine`
 ///
 /// ### Architectural Design Decision: Dependency Injection (DI)
 /// Encapsulates the repository to perform alias lookups safely
 pub struct CoreResolutionEngine {
-    repo: Arc<dyn ScriptureRepository + Send + Sync>,
+    repo: SharedScriptureRepository,
 }
 
 impl CoreResolutionEngine {
-    pub fn new(repo: Arc<dyn ScriptureRepository + Send + Sync>) -> Self {
+    pub fn new(repo: SharedScriptureRepository) -> Self {
         Self { repo }
     }
 

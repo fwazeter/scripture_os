@@ -7,7 +7,6 @@
 use crate::fsi::models::{Coordinate, LexKey, MacroID, NamespaceID, WorkID};
 use crate::parsers::{ParsedEntry, ScriptureParser};
 use crate::utils::errors::ScriptureError;
-use std::simd::i32x1;
 
 pub struct QuranPipeParser {
     pub work_id: WorkID,
@@ -23,7 +22,10 @@ impl ScriptureParser for QuranPipeParser {
         let mut entries = Vec::new();
 
         for (line_num, line) in raw_content.lines().enumerate() {
-            if line.trim().is_empty() {
+            let trimmed = line.trim();
+
+            // Skip empty lines and copyright/comment blocks
+            if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
 

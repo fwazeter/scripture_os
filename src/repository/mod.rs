@@ -36,4 +36,10 @@ pub trait ScriptureRepository: Send + Sync {
 
     /// Batch inserts a slice of ScriptureAtoms into the FSI structural spine.
     async fn insert_atoms(&self, atoms: &[ScriptureAtom]) -> Result<(), ScriptureError>;
+
+    /// Fetches the raw text string from the dictionary using its ID.
+    async fn get_lexicon_text(&self, lexicon_id: LexiconID) -> Result<String, ScriptureError>;
 }
+
+/// A thread-safe type alias for injecting the repository into engines.
+pub type SharedScriptureRepository = std::sync::Arc<dyn ScriptureRepository + Send + Sync>;

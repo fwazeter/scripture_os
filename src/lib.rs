@@ -7,6 +7,7 @@
 //! 3. **Engines**: The service layer where business logic resides.
 //! 4. **Utils**: Shared primitives like error handling.
 
+pub mod api;
 pub mod engines;
 pub mod fsi;
 pub mod parsers;

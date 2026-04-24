@@ -2,12 +2,12 @@
 //!
 //! ### Architectural Design Decision: Decoupled Orchestration
 //! This engine takes ANY format (via `ScriptureParser`) and ANY database
-//! (via `ScriptureRepository`), binds them together with `blake3` cryptography,
+//! (via `SharedScriptureRepository`), binds them together with `blake3` cryptography,
 //! and safely persists them.
 
 use crate::fsi::models::{ScriptureAtom, SubMask};
 use crate::parsers::ScriptureParser;
-use crate::repository::ScriptureRepository;
+use crate::repository::SharedScriptureRepository;
 use crate::utils::errors::ScriptureError;
 use std::sync::Arc;
 
@@ -15,11 +15,11 @@ use std::sync::Arc;
 ///
 /// ### Architectural Design Decision: Dependency Injection
 pub struct CoreIngestionEngine {
-    repo: Arc<dyn ScriptureRepository + Send + Sync>,
+    repo: SharedScriptureRepository,
 }
 
 impl CoreIngestionEngine {
-    pub fn new(repo: Arc<dyn ScriptureRepository + Send + Sync>) -> Self {
+    pub fn new(repo: SharedScriptureRepository) -> Self {
         Self { repo }
     }
 

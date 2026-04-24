@@ -14,3 +14,4 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uui
 blake3 = "1.8.4"
 async-trait = "0.1.89"
 thiserror = "2.0.18"
+dotenvy = "0.15.7"
