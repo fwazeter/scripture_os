@@ -10,6 +10,7 @@
 pub mod api;
 pub mod engines;
 pub mod fsi;
+pub mod lexicon;
 pub mod parsers;
 pub mod repository;
 pub mod utils;

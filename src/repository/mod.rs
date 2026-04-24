@@ -4,6 +4,7 @@
 //! This module defines the `ScriptureRepository` trait. By defining this
 //! contract before implementation, we decouple our business logic (Engines)
 //! from the physical storage (Postgres).
+pub mod lexicon_repo;
 pub mod mock;
 pub mod postgres;
 
