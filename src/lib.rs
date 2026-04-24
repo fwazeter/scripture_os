@@ -9,5 +9,6 @@
 
 pub mod engines;
 pub mod fsi;
+pub mod parsers;
 pub mod repository;
 pub mod utils;

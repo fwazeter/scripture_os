@@ -7,7 +7,7 @@
 pub mod mock;
 pub mod postgres;
 
-use crate::fsi::models::{ScriptureAtom, WorkID};
+use crate::fsi::models::{Coordinate, LexiconID, ScriptureAtom};
 use crate::utils::errors::ScriptureError;
 use async_trait::async_trait;
 
@@ -19,16 +19,21 @@ use async_trait::async_trait;
 /// engine logic.
 #[async_trait]
 pub trait ScriptureRepository: Send + Sync {
-    /// Fetches a single atom by its absolute FSI coordinate.
+    /// Fetches a single atom by its 3D FSI coordinate.
     async fn get_atom_by_coordinate(
         &self,
-        cood: Coordinate,
+        coord: Coordinate,
     ) -> Result<ScriptureAtom, ScriptureError>;
 
-    /// Fetches a range of atoms (e.g. a chapter) for a specific work and namespace.
-    async fn get_atom_range(
-        &self,
-        work: crate::fsi::models::WorkID,
-        ns: crate::fsi::models::NamespaceID,
-    ) -> Result<Vec<ScriptureAtom>, ScriptureError>;
+    /// Looks up an FSI coordinate based on a human-readable alias (e.g., "quran.1.1").
+    async fn resolve_alias(&self, path_string: &str) -> Result<Coordinate, ScriptureError>;
+
+    /// Fetches the immediately following logical atom in the sequence
+    async fn get_next_atom(&self, current: Coordinate) -> Result<ScriptureAtom, ScriptureError>;
+
+    /// Inserts raw text into the universal dictionary and returns its unique pointer.
+    async fn insert_lexicon_entry(&self, text: &str) -> Result<LexiconID, ScriptureError>;
+
+    /// Batch inserts a slice of ScriptureAtoms into the FSI structural spine.
+    async fn insert_atoms(&self, atoms: &[ScriptureAtom]) -> Result<(), ScriptureError>;
 }
